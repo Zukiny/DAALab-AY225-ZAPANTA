@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MidtermLab2-Zapanta - Pure JS Path Calculator</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+            background: linear-gradient(135deg, #FF9500 0%, #FFD4A3 100%); 
+            min-height: 100vh; padding: 20px; color: #333;
+        }
+        .container { max-width: 1000px; margin: 0 auto; display: grid; grid-template-rows: auto auto 1fr auto; gap: 15px; }
+        .header { 
+            background: rgba(0,123,255,0.9); color: white; padding: 20px; border-radius: 12px; text-align: center; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .upload-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; margin: 15px 0; }
+        input, select, button { padding: 10px 15px; border: 2px solid #007BFF; border-radius: 8px; font-size: 16px; transition: all 0.2s; }
+        button { background: #007BFF; color: white; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0056b3; transform: translateY(-1px); }
+        input:focus, select:focus { outline: none; border-color: #FF9500; box-shadow: 0 0 0 3px rgba(255,149,0,0.2); }
+        details { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin: 10px 0; }
+        summary { font-weight: bold; cursor: pointer; color: #007BFF; padding: 10px; border-radius: 8px; }
+        canvas { width: 100%; height: 350px; border: 2px solid #007BFF; border-radius: 12px; background: white; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #007BFF; color: white; position: sticky; top: 0; }
+        tr:nth-child(even) { background: #f8f9ff; }
+        tr:hover { background: rgba(255,149,0,0.1); }
+        #nodesList { font-size: 14px; color: #666; padding: 10px; background: #f0f8ff; border-radius: 8px; }
+        @media (max-width: 768px) { .controls { flex-direction: column; } canvas { height: 250px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗺️ Smart Network Path Calculator</h1>
+            <p>Pure JS | Dijkstra Paths (Distance/Time/Fuel) | Compact Blue/Orange</p>
+        </div>
+        
+        <div class="upload-section">
+            <input type="file" id="fileInput" accept=".csv,.txt">
+            <div id="nodesList">Upload CSV file to start</div>
+            <div class="controls">
+                <label>Start: <input id="startNode" placeholder="e.g. DASMA"></label>
+                <label>Mode: 
+                    <select id="mode">
+                        <option value="single">To All Ends</option>
+                        <option value="all">All Pairs</option>
+                    </select>
+                </label>
+                <label>Optimize: 
+                    <select id="criteria">
+                        <option value="distance">Distance</option>
+                        <option value="time">Time</option>
+                        <option value="fuel">Fuel</option>
+                        <option value="all">All</option>
+                    </select>
+                </label>
+                <button onclick="compute()">Compute</button>
+            </div>
+        </div>
+        
+        <details id="vizSection">
+            <summary>📈 Node Graph (Canvas)</summary>
+            <canvas id="graphCanvas" width="800" height="350"></canvas>
+        </details>
+        
+        <details id="resultsSection">
+            <summary>📋 Path Results (Table)</summary>
+            <table id="pathTable"><tr><th>From</th><th>To</th><th>Path</th><th>Cost</th></tr></table>
+        </details>
+    </div>
+
+    <script>
+        let graph = { nodes: [], edges: [], adj: {} };
+
+        // Flexible parse like Python
+        function parseGraph(text) {
+            let df = [];
+            // Try CSV
+            try { 
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+                let headers = lines[0].toLowerCase().split(/[\t,;\s]+/).map(h => h.trim());
+                for (let line of lines.slice(1)) {
+                    let parts = line.split(/[\t,;\s]+/).map(p => p.trim());
+                    if (parts.length >= 3) {
+                        let row = {};
+                        headers.forEach((h, i) => {
+                            if (i < parts.length) {
+                                row[h] = isNaN(parts[i]) ? parts[i] : parseFloat(parts[i]);
+                            }
+                        });
+                        // Auto-map columns
+                        if (!row.from) Object.keys(row)[0] && (row.from = Object.values(row)[0]);
+                        if (!row.to) Object.keys(row)[1] && (row.to = Object.values(row)[1]);
+                        if (row.from && row.to) df.push(row);
+                    }
+                }
+            } catch(e) { }
+            // Regex fallback
+            if (df.length === 0) {
+                const lines = text.split('\n');
+                for (let line of lines) {
+                    const parts = line.match(/[A-Za-z][A-Za-z0-9_-]*/g) || [];
+                    const nums = line.match(/(\d+\.?\d*)/g) || [];
+                    if (parts.length >= 2 && nums.length >= 3) {
+                        df.push({
+                            from: parts[0],
+                            to: parts[1],
+                            distance: parseFloat(nums[0]),
+                            time: parseFloat(nums[1]),
+                            fuel: parseFloat(nums[2])
+                        });
+                    }
+                }
+            }
+            // Build graph
+            const allNodes = new Set();
+            df.forEach(row => {
+                allNodes.add(row.from);
+                allNodes.add(row.to);
+                if (!graph.adj[row.from]) graph.adj[row.from] = {};
+                graph.adj[row.from][row.to] = {
+                    distance: row.distance || Infinity,
+                    time: row.time || Infinity,
+                    fuel: row.fuel || Infinity
+                };
+            });
+            graph.nodes = Array.from(allNodes).sort();
+            graph.edges = df;
+            return graph;
+        }
+
+        // Fuzzy match like difflib
+        function findClosestNode(input, nodes) {
+            input = input.toLowerCase();
+            for (let node of nodes) if (node.toLowerCase() === input) return node;
+            let best = nodes[0], score = 0;
+            for (let node of nodes) {
+                let dist = 0;
+                const a = input, b = node.toLowerCase();
+                for (let i = 0; i < a.length; i++) dist += a[i] !== b[i] ? 1 : 0;
+                if (dist / Math.max(a.length, b.length) > score && dist <= 3) {
+                    score = dist / Math.max(a.length, b.length);
+                    best = node;
+                }
+            }
+            return best;
+        }
+
+        // Dijkstra with pq sim (sorted array)
+        function dijkstra(start, end, weight) {
+            const dist = {}; const prev = {}; const pq = [];
+            graph.nodes.forEach(n => { dist[n] = Infinity; prev[n] = null; });
+            dist[start] = 0;
+            pq.push([0, start]);
+            while (pq.length) {
+                pq.sort((a,b) => a[0] - b[0]);
+                const [d, u] = pq.shift();
+                if (d > dist[u]) continue;
+                for (let v in graph.adj[u] || {}) {
+                    const w = graph.adj[u][v][weight];
+                    if (w === Infinity) continue;
+                    const alt = d + w;
+                    if (alt < dist[v]) {
+                        dist[v] = alt;
+                        prev[v] = u;
+                        pq.push([alt, v]);
+                    }
+                }
+            }
+            const path = [];
+            let cur = end;
+            while (cur) { path.unshift(cur); cur = prev[cur]; }
+            return path[0] === start ? [path, dist[end]] : [[], Infinity];
+        }
+
+        async function loadFile() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return;
+            const text = await file.text();
+            graph = parseGraph(text);
+            document.getElementById('nodesList').innerHTML = `Nodes: ${graph.nodes.join(', ')} (${graph.nodes.length})`;
+            drawGraph();
+        }
+
+        function loadSample() {
+            // Sample data embedded
+            const sample = `from,to,distance,time,fuel\nA,B,10,5,3\nB,C,15,7,4\nA,C,25,12,8\nC,D,20,9,5`;
+            graph = parseGraph(sample);
+            document.getElementById('nodesList').innerHTML = `Sample loaded. Nodes: ${graph.nodes.join(', ')} (${graph.nodes.length})`;
+            drawGraph();
+        }
+
+        function compute() {
+            if (graph.edges.length === 0) {
+                alert('Please upload a CSV file first!');
+                return;
+            }
+            const startInput = document.getElementById('startNode').value || graph.nodes[0];
+            const start = findClosestNode(startInput, graph.nodes);
+            const mode = document.getElementById('mode').value;
+            const criteria = document.getElementById('criteria').value;
+            const weights = criteria === 'all' ? ['distance','time','fuel'] : [criteria];
+            let html = '<tr><th>From</th><th>To</th>';
+            weights.forEach(w => { html += `<th>${w.toUpperCase()}</th>`; });
+            html += '<th>Best Path</th></tr>';
+
+            const sources = mode === 'single' ? [start] : graph.nodes;
+            sources.forEach(s => {
+                graph.nodes.filter(e => e !== s).forEach(e => {
+                    let row = `<tr><td>${s}</td><td>${e}</td>`;
+                    let bestPath = '', bestCost = Infinity, bestW = '';
+                    weights.forEach(w => {
+                        const [path, cost] = dijkstra(s, e, w);
+                        row += `<td>${cost === Infinity ? 'No' : path.join(' → ') + ' (' + cost.toFixed(2) + ')'}</td>`;
+                        if (cost < bestCost && cost !== Infinity) {
+                            bestCost = cost;
+                            bestPath = path.join(' → ');
+                            bestW = w;
+                        }
+                    });
+                    row += `<td>${bestPath || 'No path'} (${bestW.toUpperCase()}: ${bestCost === Infinity ? '∞' : bestCost.toFixed(2)})</td></tr>`;
+                    html += row;
+                });
+            });
+            document.getElementById('pathTable').innerHTML = html;
+            document.getElementById('resultsSection').open = true;
+            drawGraph();
+        }
+
+        function drawGraph() {
+            const canvas = document.getElementById('graphCanvas');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.clientWidth; const h = canvas.height;
+            canvas.width = w; canvas.height = h;
+            ctx.clearRect(0,0,w,h);
+
+            // Node positions circular
+            const nodePos = {};
+            graph.nodes.forEach((node, i) => {
+                const angle = (i / graph.nodes.length) * Math.PI * 2;
+                nodePos[node] = {
+                    x: w/2 + Math.cos(angle) * (Math.min(w,h)/3),
+                    y: h/2 + Math.sin(angle) * (Math.min(w,h)/3)
+                };
+            });
+
+            // Edges
+            ctx.strokeStyle = '#007BFF'; ctx.lineWidth = 3;
+            for (let from in graph.adj) {
+                for (let to in graph.adj[from]) {
+                    const edge = graph.adj[from][to];
+                    const p1 = nodePos[from], p2 = nodePos[to];
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                    // Label dist
+                    ctx.fillStyle = '#FF9500'; ctx.font = 'bold 14px sans-serif';
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText(edge.distance.toFixed(1), (p1.x+p2.x)/2, (p1.y+p2.y)/2);
+                }
+            }
+
+            // Nodes
+            graph.nodes.forEach(node => {
+                const pos = nodePos[node];
+                ctx.fillStyle = '#007BFF'; ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI*2);
+                ctx.fill(); ctx.stroke();
+                ctx.fillStyle = 'white'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(node, pos.x, pos.y);
+            });
+        }
+
+        // File change listener
+        document.getElementById('fileInput').addEventListener('change', loadFile);
+        loadSample(); // Init with sample
+    </script>
+</body>
+</html>
