@@ -1,286 +1,351 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MidtermLab2-Zapanta - Pure JS Path Calculator</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-            background: linear-gradient(135deg, #FF9500 0%, #FFD4A3 100%); 
-            min-height: 100vh; padding: 20px; color: #333;
-        }
-        .container { max-width: 1000px; margin: 0 auto; display: grid; grid-template-rows: auto auto 1fr auto; gap: 15px; }
-        .header { 
-            background: rgba(0,123,255,0.9); color: white; padding: 20px; border-radius: 12px; text-align: center; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-        .upload-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; margin: 15px 0; }
-        input, select, button { padding: 10px 15px; border: 2px solid #007BFF; border-radius: 8px; font-size: 16px; transition: all 0.2s; }
-        button { background: #007BFF; color: white; cursor: pointer; font-weight: bold; }
-        button:hover { background: #0056b3; transform: translateY(-1px); }
-        input:focus, select:focus { outline: none; border-color: #FF9500; box-shadow: 0 0 0 3px rgba(255,149,0,0.2); }
-        details { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin: 10px 0; }
-        summary { font-weight: bold; cursor: pointer; color: #007BFF; padding: 10px; border-radius: 8px; }
-        canvas { width: 100%; height: 350px; border: 2px solid #007BFF; border-radius: 12px; background: white; }
-        table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #007BFF; color: white; position: sticky; top: 0; }
-        tr:nth-child(even) { background: #f8f9ff; }
-        tr:hover { background: rgba(255,149,0,0.1); }
-        #nodesList { font-size: 14px; color: #666; padding: 10px; background: #f0f8ff; border-radius: 8px; }
-        @media (max-width: 768px) { .controls { flex-direction: column; } canvas { height: 250px; } }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🗺️ Smart Network Path Calculator</h1>
-            <p>Pure JS | Dijkstra Paths (Distance/Time/Fuel) | Compact Blue/Orange</p>
-        </div>
+import csv
+import heapq
+import math
+import os
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+# ─────────────────────────────────────────
+#  DATA LOADING
+# ─────────────────────────────────────────
+
+def load_graph(filepath):
+    graph = {}   # adjacency list: node -> list of (neighbor, attrs)
+    nodes = set()
+
+    with open(filepath, newline='', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            frm  = row['From Node'].strip()
+            to   = row['To Node'].strip()
+            dist = float(row['Distance (km)'])
+            time = float(row['Time (mins)'])
+            fuel = float(row['Fuel (Liters)'])
+
+            nodes.add(frm)
+            nodes.add(to)
+
+            graph.setdefault(frm, []).append((to,   {'distance': dist, 'time': time, 'fuel': fuel}))
+            graph.setdefault(to,  []).append((frm,  {'distance': dist, 'time': time, 'fuel': fuel}))
+
+    return graph, sorted(nodes)
+
+
+# ─────────────────────────────────────────
+#  DIJKSTRA
+# ─────────────────────────────────────────
+
+def dijkstra(graph, start, end, weight_key):
+    pq = [(0, start, [start], {'distance': 0, 'time': 0, 'fuel': 0})]
+    visited = {}
+
+    while pq:
+        cost, node, path, totals = heapq.heappop(pq)
+
+        if node in visited:
+            continue
+
+        visited[node] = cost
+
+        if node == end:
+            return cost, path, totals
+
+        for neighbor, attrs in graph.get(node, []):
+            if neighbor not in visited:
+                new_cost = cost + attrs[weight_key]
+                new_totals = {
+                    'distance': totals['distance'] + attrs['distance'],
+                    'time': totals['time'] + attrs['time'],
+                    'fuel': totals['fuel'] + attrs['fuel']
+                }
+
+                heapq.heappush(
+                    pq,
+                    (new_cost, neighbor, path + [neighbor], new_totals)
+                )
+
+    return None, [], {}
+
+
+# ─────────────────────────────────────────
+#  NEW COLOR SCHEME & DIMENSIONS (Compact)
+# ─────────────────────────────────────────
+
+# Blue & Orange theme
+BG_COLOR        = '#0f172a'      # Slate 900
+CARD_COLOR      = '#1e293b'      # Slate 800  
+ACCENT_BLUE     = '#3b82f6'      # Blue 500
+ACCENT_ORANGE   = '#f97316'      # Orange 500
+TEXT_PRIMARY    = '#f8fafc'      # Slate 50
+TEXT_SECONDARY  = '#cbd5e1'      # Slate 200
+EDGE_COLOR      = '#475569'      # Slate 600
+NODE_FILL       = '#334155'      # Slate 700
+
+HIGHLIGHT_EDGE  = '#f97316'      # Orange
+HIGHLIGHT_NODE  = '#3b82f6'      # Blue
+
+# Compact dimensions
+CANVAS_W        = 580
+CANVAS_H        = 260
+RADIUS          = 18
+WINDOW_W        = 620
+WINDOW_H        = 680
+
+NODE_POSITIONS = {
+    'NOVELETA': (0.25, 0.35),
+    'IMUS':     (0.42, 0.12),
+    'BACOOR':   (0.75, 0.20),
+    'KAWIT':    (0.25, 0.55),
+    'DASMA':    (0.85, 0.55),
+    'INDANG':   (0.18, 0.85),
+    'SILANG':   (0.52, 0.85),
+    'GENTRI':   (0.85, 0.85),
+}
+
+
+def draw_map(canvas, graph, nodes, highlight_path=None, animate=False):
+    canvas.delete('all')
+    W, H = CANVAS_W, CANVAS_H
+
+    # Subtle grid
+    for x in range(0, W, 25):
+        for y in range(0, H, 25):
+            canvas.create_oval(x, y, x+1, y+1, fill=CARD_COLOR, outline='')
+
+    def pos(name):
+        px, py = NODE_POSITIONS.get(name, (0.5, 0.5))
+        return int(px * W), int(py * H)
+
+    positions = {name: pos(name) for name in nodes}
+    drawn_edges = set()
+    
+    hl_edges = set()
+    if highlight_path:
+        for i in range(len(highlight_path) - 1):
+            a, b = highlight_path[i], highlight_path[i + 1]
+            hl_edges.add((min(a, b), max(a, b)))
+
+    # Edges
+    for node in graph:
+        for neighbor, attrs in graph[node]:
+            key = (min(node, neighbor), max(node, neighbor))
+            if key in drawn_edges:
+                continue
+            drawn_edges.add(key)
+
+            x1, y1 = positions[node]
+            x2, y2 = positions[neighbor]
+
+            is_hl = key in hl_edges and not animate
+            color = HIGHLIGHT_EDGE if is_hl else EDGE_COLOR
+            width = 3 if is_hl else 1.2
+
+            cx, cy = (x1 + x2)//2, (y1 + y2)//2 - 15
+            canvas.create_line(
+                x1, y1, cx, cy, x2, y2,
+                smooth=True, splinesteps=24,
+                fill=color, width=width
+            )
+
+            mx, my = (x1 + x2)//2, (y1 + y2)//2
+            canvas.create_text(mx, my - 6,
+                               text=f"{attrs['distance']:.0f}",
+                               fill=TEXT_SECONDARY,
+                               font=('SF Pro', 7, 'bold'))
+
+    # Nodes
+    for name in nodes:
+        x, y = positions[name]
+        is_hl = highlight_path and name in highlight_path
+
+        # Glow
+        canvas.create_oval(
+            x - RADIUS - 2, y - RADIUS - 2,
+            x + RADIUS + 2, y + RADIUS + 2,
+            fill='', outline=ACCENT_BLUE if is_hl else 'transparent',
+            width=2
+        )
+
+        # Node
+        canvas.create_oval(
+            x - RADIUS, y - RADIUS,
+            x + RADIUS, y + RADIUS,
+            fill=HIGHLIGHT_NODE if is_hl else NODE_FILL,
+            outline=ACCENT_BLUE if is_hl else '#64748b',
+            width=1.5
+        )
+
+        canvas.create_text(x, y,
+                           text=name[:3].upper(),
+                           fill=TEXT_PRIMARY,
+                           font=('SF Pro', 9, 'bold'))
+
+    if animate and highlight_path:
+        animate_path(canvas, highlight_path, positions)
+
+
+def animate_path(canvas, path, positions, i=0):
+    if i >= len(path) - 1:
+        return
+
+    a, b = path[i], path[i+1]
+    x1, y1 = positions[a]
+    x2, y2 = positions[b]
+
+    cx, cy = (x1 + x2)//2, (y1 + y2)//2 - 15
+
+    canvas.create_line(
+        x1, y1, cx, cy, x2, y2,
+        smooth=True, splinesteps=24,
+        fill=HIGHLIGHT_EDGE, width=3
+    )
+
+    canvas.after(150, lambda: animate_path(canvas, path, positions, i+1))
+
+
+# ─────────────────────────────────────────
+#  SLICK COMPACT GUI
+# ─────────────────────────────────────────
+
+def build_gui(graph, nodes):
+    root = tk.Tk()
+    root.title("PathFinder")
+    root.geometry(f"{WINDOW_W}x{WINDOW_H}")
+    root.configure(bg=BG_COLOR)
+    root.resizable(False, False)
+
+    # ── Header ──
+    header = tk.Frame(root, bg=BG_COLOR, height=60)
+    header.pack(fill='x')
+    header.pack_propagate(False)
+
+    tk.Label(header, text="PATHFINDER", 
+             font=('SF Pro', 20, 'bold'),
+             fg=ACCENT_BLUE, bg=BG_COLOR).pack(pady=12)
+
+    # ── Compact Map ──
+    canvas_frame = tk.Frame(root, bg=CARD_COLOR, relief='solid', bd=1)
+    canvas_frame.pack(pady=12, padx=16, fill='x')
+    
+    canvas = tk.Canvas(canvas_frame, width=CANVAS_W, height=CANVAS_H,
+                       bg=BG_COLOR, highlightthickness=0)
+    canvas.pack(pady=8)
+
+    draw_map(canvas, graph, nodes)
+
+    # ── Controls (Compact Grid) ──
+    controls = tk.Frame(root, bg=BG_COLOR)
+    controls.pack(pady=8, padx=16)
+
+    # Style buttons
+    style = ttk.Style()
+    style.configure('Accent.TButton', font=('SF Pro', 9, 'bold'))
+    
+    tk.Label(controls, text="From", bg=BG_COLOR, fg=TEXT_SECONDARY,
+             font=('SF Pro', 9, 'bold')).grid(row=0, column=0, sticky='w', pady=(0,4))
+    
+    frm_var = tk.StringVar(value=nodes[0])
+    ttk.Combobox(controls, textvariable=frm_var, values=nodes, width=10,
+                 state='readonly', font=('SF Pro', 9)).grid(row=1, column=0, padx=(0,8))
+
+    tk.Label(controls, text="To", bg=BG_COLOR, fg=TEXT_SECONDARY,
+             font=('SF Pro', 9, 'bold')).grid(row=0, column=1, sticky='w', pady=(0,4))
+    
+    to_var = tk.StringVar(value=nodes[-1])
+    ttk.Combobox(controls, textvariable=to_var, values=nodes, width=10,
+                 state='readonly', font=('SF Pro', 9)).grid(row=1, column=1, padx=(0,8))
+
+    tk.Label(controls, text="Mode", bg=BG_COLOR, fg=TEXT_SECONDARY,
+             font=('SF Pro', 9, 'bold')).grid(row=0, column=2, sticky='w', pady=(0,4))
+    
+    opt_var = tk.StringVar(value='distance')
+    ttk.Combobox(controls, textvariable=opt_var, 
+                 values=['distance', 'time', 'fuel'], width=9,
+                 state='readonly', font=('SF Pro', 9)).grid(row=1, column=2)
+
+    # ── Results Card ──
+    result_card = tk.Frame(root, bg=CARD_COLOR, relief='solid', bd=1)
+    result_card.pack(pady=12, padx=16, fill='x')
+
+    result_var = tk.StringVar(value="Choose start, destination, and optimization mode.")
+    result_label = tk.Label(result_card, textvariable=result_var, bg=CARD_COLOR,
+                           fg=TEXT_PRIMARY, font=('SF Pro', 10),
+                           justify='left', wraplength=560, pady=16)
+    result_label.pack(padx=20)
+
+    # ── Action Buttons ──
+    btn_frame = tk.Frame(root, bg=BG_COLOR)
+    btn_frame.pack(pady=(0,12), padx=16)
+
+    def find_path():
+        start, end, key = frm_var.get(), to_var.get(), opt_var.get()
         
-        <div class="upload-section">
-            <input type="file" id="fileInput" accept=".csv,.txt">
-            <div id="nodesList">Upload CSV file to start</div>
-            <div class="controls">
-                <label>Start: <input id="startNode" placeholder="e.g. DASMA"></label>
-                <label>Mode: 
-                    <select id="mode">
-                        <option value="single">To All Ends</option>
-                        <option value="all">All Pairs</option>
-                    </select>
-                </label>
-                <label>Optimize: 
-                    <select id="criteria">
-                        <option value="distance">Distance</option>
-                        <option value="time">Time</option>
-                        <option value="fuel">Fuel</option>
-                        <option value="all">All</option>
-                    </select>
-                </label>
-                <button onclick="compute()">Compute</button>
-            </div>
-        </div>
-        
-        <details id="vizSection">
-            <summary>📈 Node Graph (Canvas)</summary>
-            <canvas id="graphCanvas" width="800" height="350"></canvas>
-        </details>
-        
-        <details id="resultsSection">
-            <summary>📋 Path Results (Table)</summary>
-            <table id="pathTable"><tr><th>From</th><th>To</th><th>Path</th><th>Cost</th></tr></table>
-        </details>
-    </div>
+        if start == end:
+            messagebox.showwarning("Error", "Start ≠ Destination")
+            return
 
-    <script>
-        let graph = { nodes: [], edges: [], adj: {} };
+        cost, path, totals = dijkstra(graph, start, end, key)
 
-        // Flexible parse like Python
-        function parseGraph(text) {
-            let df = [];
-            // Try CSV
-            try { 
-                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-                let headers = lines[0].toLowerCase().split(/[\t,;\s]+/).map(h => h.trim());
-                for (let line of lines.slice(1)) {
-                    let parts = line.split(/[\t,;\s]+/).map(p => p.trim());
-                    if (parts.length >= 3) {
-                        let row = {};
-                        headers.forEach((h, i) => {
-                            if (i < parts.length) {
-                                row[h] = isNaN(parts[i]) ? parts[i] : parseFloat(parts[i]);
-                            }
-                        });
-                        // Auto-map columns
-                        if (!row.from) Object.keys(row)[0] && (row.from = Object.values(row)[0]);
-                        if (!row.to) Object.keys(row)[1] && (row.to = Object.values(row)[1]);
-                        if (row.from && row.to) df.push(row);
-                    }
-                }
-            } catch(e) { }
-            // Regex fallback
-            if (df.length === 0) {
-                const lines = text.split('\n');
-                for (let line of lines) {
-                    const parts = line.match(/[A-Za-z][A-Za-z0-9_-]*/g) || [];
-                    const nums = line.match(/(\d+\.?\d*)/g) || [];
-                    if (parts.length >= 2 && nums.length >= 3) {
-                        df.push({
-                            from: parts[0],
-                            to: parts[1],
-                            distance: parseFloat(nums[0]),
-                            time: parseFloat(nums[1]),
-                            fuel: parseFloat(nums[2])
-                        });
-                    }
-                }
-            }
-            // Build graph
-            const allNodes = new Set();
-            df.forEach(row => {
-                allNodes.add(row.from);
-                allNodes.add(row.to);
-                if (!graph.adj[row.from]) graph.adj[row.from] = {};
-                graph.adj[row.from][row.to] = {
-                    distance: row.distance || Infinity,
-                    time: row.time || Infinity,
-                    fuel: row.fuel || Infinity
-                };
-            });
-            graph.nodes = Array.from(allNodes).sort();
-            graph.edges = df;
-            return graph;
-        }
+        if not path:
+            result_var.set(f"❌ No route: {start} → {end}")
+            draw_map(canvas, graph, nodes)
+            return
 
-        // Fuzzy match like difflib
-        function findClosestNode(input, nodes) {
-            input = input.toLowerCase();
-            for (let node of nodes) if (node.toLowerCase() === input) return node;
-            let best = nodes[0], score = 0;
-            for (let node of nodes) {
-                let dist = 0;
-                const a = input, b = node.toLowerCase();
-                for (let i = 0; i < a.length; i++) dist += a[i] !== b[i] ? 1 : 0;
-                if (dist / Math.max(a.length, b.length) > score && dist <= 3) {
-                    score = dist / Math.max(a.length, b.length);
-                    best = node;
-                }
-            }
-            return best;
-        }
+        path_str = " → ".join(path)
+        result_var.set(
+            f"✅ ROUTE: {path_str}\n\n"
+            f"📏 Distance: {totals['distance']:.1f} km\n"
+            f"⏱️  Time: {totals['time']:.0f} min\n"
+            f"⛽ Fuel: {totals['fuel']:.1f} L"
+        )
 
-        // Dijkstra with pq sim (sorted array)
-        function dijkstra(start, end, weight) {
-            const dist = {}; const prev = {}; const pq = [];
-            graph.nodes.forEach(n => { dist[n] = Infinity; prev[n] = null; });
-            dist[start] = 0;
-            pq.push([0, start]);
-            while (pq.length) {
-                pq.sort((a,b) => a[0] - b[0]);
-                const [d, u] = pq.shift();
-                if (d > dist[u]) continue;
-                for (let v in graph.adj[u] || {}) {
-                    const w = graph.adj[u][v][weight];
-                    if (w === Infinity) continue;
-                    const alt = d + w;
-                    if (alt < dist[v]) {
-                        dist[v] = alt;
-                        prev[v] = u;
-                        pq.push([alt, v]);
-                    }
-                }
-            }
-            const path = [];
-            let cur = end;
-            while (cur) { path.unshift(cur); cur = prev[cur]; }
-            return path[0] === start ? [path, dist[end]] : [[], Infinity];
-        }
+        draw_map(canvas, graph, nodes, highlight_path=path, animate=True)
 
-        async function loadFile() {
-            const file = document.getElementById('fileInput').files[0];
-            if (!file) return;
-            const text = await file.text();
-            graph = parseGraph(text);
-            document.getElementById('nodesList').innerHTML = `Nodes: ${graph.nodes.join(', ')} (${graph.nodes.length})`;
-            drawGraph();
-        }
+    def reset():
+        result_var.set("Choose start, destination, and optimization mode.")
+        draw_map(canvas, graph, nodes)
 
-        function loadSample() {
-            // Sample data embedded
-            const sample = `from,to,distance,time,fuel\nA,B,10,5,3\nB,C,15,7,4\nA,C,25,12,8\nC,D,20,9,5`;
-            graph = parseGraph(sample);
-            document.getElementById('nodesList').innerHTML = `Sample loaded. Nodes: ${graph.nodes.join(', ')} (${graph.nodes.length})`;
-            drawGraph();
-        }
+    # Styled buttons
+    find_btn = tk.Button(btn_frame, text="FIND ROUTE", command=find_path,
+                        bg=ACCENT_BLUE, fg='white', font=('SF Pro', 11, 'bold'),
+                        relief='flat', padx=24, pady=8, cursor='hand2')
+    find_btn.grid(row=0, column=0, padx=(0,8))
 
-        function compute() {
-            if (graph.edges.length === 0) {
-                alert('Please upload a CSV file first!');
-                return;
-            }
-            const startInput = document.getElementById('startNode').value || graph.nodes[0];
-            const start = findClosestNode(startInput, graph.nodes);
-            const mode = document.getElementById('mode').value;
-            const criteria = document.getElementById('criteria').value;
-            const weights = criteria === 'all' ? ['distance','time','fuel'] : [criteria];
-            let html = '<tr><th>From</th><th>To</th>';
-            weights.forEach(w => { html += `<th>${w.toUpperCase()}</th>`; });
-            html += '<th>Best Path</th></tr>';
+    reset_btn = tk.Button(btn_frame, text="RESET", command=reset,
+                         bg=CARD_COLOR, fg=TEXT_PRIMARY, font=('SF Pro', 10, 'bold'),
+                         relief='flat', padx=20, pady=8, cursor='hand2')
+    reset_btn.grid(row=0, column=1)
 
-            const sources = mode === 'single' ? [start] : graph.nodes;
-            sources.forEach(s => {
-                graph.nodes.filter(e => e !== s).forEach(e => {
-                    let row = `<tr><td>${s}</td><td>${e}</td>`;
-                    let bestPath = '', bestCost = Infinity, bestW = '';
-                    weights.forEach(w => {
-                        const [path, cost] = dijkstra(s, e, w);
-                        row += `<td>${cost === Infinity ? 'No' : path.join(' → ') + ' (' + cost.toFixed(2) + ')'}</td>`;
-                        if (cost < bestCost && cost !== Infinity) {
-                            bestCost = cost;
-                            bestPath = path.join(' → ');
-                            bestW = w;
-                        }
-                    });
-                    row += `<td>${bestPath || 'No path'} (${bestW.toUpperCase()}: ${bestCost === Infinity ? '∞' : bestCost.toFixed(2)})</td></tr>`;
-                    html += row;
-                });
-            });
-            document.getElementById('pathTable').innerHTML = html;
-            document.getElementById('resultsSection').open = true;
-            drawGraph();
-        }
+    # Hover effects
+    def on_enter(e, btn, bg):
+        btn.config(bg=bg)
+    def on_leave(e, btn, bg):
+        btn.config(bg=bg)
 
-        function drawGraph() {
-            const canvas = document.getElementById('graphCanvas');
-            const ctx = canvas.getContext('2d');
-            const w = canvas.clientWidth; const h = canvas.height;
-            canvas.width = w; canvas.height = h;
-            ctx.clearRect(0,0,w,h);
+    find_btn.bind("<Enter>", lambda e: on_enter(e, find_btn, '#2563eb'))
+    find_btn.bind("<Leave>", lambda e: on_enter(e, find_btn, ACCENT_BLUE))
+    reset_btn.bind("<Enter>", lambda e: on_enter(e, reset_btn, '#334155'))
+    reset_btn.bind("<Leave>", lambda e: on_enter(e, reset_btn, CARD_COLOR))
 
-            // Node positions circular
-            const nodePos = {};
-            graph.nodes.forEach((node, i) => {
-                const angle = (i / graph.nodes.length) * Math.PI * 2;
-                nodePos[node] = {
-                    x: w/2 + Math.cos(angle) * (Math.min(w,h)/3),
-                    y: h/2 + Math.sin(angle) * (Math.min(w,h)/3)
-                };
-            });
+    # ── Minimal Legend ──
+    tk.Label(root, text="🔵 Nodes  🟠 Best Path  ➤ Distance labels (km)", 
+             fg=TEXT_SECONDARY, bg=BG_COLOR, font=('SF Pro', 8)).pack()
 
-            // Edges
-            ctx.strokeStyle = '#007BFF'; ctx.lineWidth = 3;
-            for (let from in graph.adj) {
-                for (let to in graph.adj[from]) {
-                    const edge = graph.adj[from][to];
-                    const p1 = nodePos[from], p2 = nodePos[to];
-                    ctx.beginPath();
-                    ctx.moveTo(p1.x, p1.y);
-                    ctx.lineTo(p2.x, p2.y);
-                    ctx.stroke();
-                    // Label dist
-                    ctx.fillStyle = '#FF9500'; ctx.font = 'bold 14px sans-serif';
-                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                    ctx.fillText(edge.distance.toFixed(1), (p1.x+p2.x)/2, (p1.y+p2.y)/2);
-                }
-            }
+    root.mainloop()
 
-            // Nodes
-            graph.nodes.forEach(node => {
-                const pos = nodePos[node];
-                ctx.fillStyle = '#007BFF'; ctx.strokeStyle = 'white'; ctx.lineWidth = 3;
-                ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI*2);
-                ctx.fill(); ctx.stroke();
-                ctx.fillStyle = 'white'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText(node, pos.x, pos.y);
-            });
-        }
 
-        // File change listener
-        document.getElementById('fileInput').addEventListener('change', loadFile);
-        loadSample(); // Init with sample
-    </script>
-</body>
-</html>
+# ─────────────────────────────────────────
+#  ENTRY POINT
+# ─────────────────────────────────────────
+
+if __name__ == '__main__':
+    CSV_FILE = os.path.join(os.path.dirname(__file__), 'Database.csv')
+    try:
+        graph, nodes = load_graph(CSV_FILE)
+    except FileNotFoundError:
+        print(f"ERROR: '{CSV_FILE}' not found.")
+        raise
+
+    print("Nodes:", nodes)
+    print(f"Edges: {sum(len(v) for v in graph.values()) // 2}")
+    build_gui(graph, nodes)
