@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated Knight's Tour</title>
+    <style>
+        :root { --dark: #2c3e50; --light: #ecf0f1; --accent: #27ae60; --reset: #e74c3c; --knight-color: #d35400; }
+        body { font-family: system-ui, sans-serif; background: #121212; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .controls { background: #222; padding: 20px; border-radius: 10px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; justify-content: center; }
+        .board-layout { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+        
+        .board-wrapper { display: grid; grid-template-columns: 30px 400px; grid-template-rows: 400px 30px; }
+        .rank-labels { display: flex; flex-direction: column; justify-content: space-around; align-items: center; font-weight: bold; color: #999; }
+        .file-labels { grid-column: 2; display: flex; justify-content: space-around; align-items: center; font-weight: bold; color: #999; height: 30px; }
+        
+        .grid { display: grid; grid-template-columns: repeat(8, 50px); grid-template-rows: repeat(8, 50px); border: 2px solid #555; position: relative; }
+        .cell { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; color: #222; transition: background 0.3s; }
+        .white { background: #dee3e6; }
+        .black { background: #8ca2ad; }
+        
+        /* Animation Effects */
+        .active-knight { background: #f1c40f !important; transform: scale(1.1); z-index: 10; border-radius: 4px; box-shadow: 0 0 10px #f1c40f; }
+        .visited { color: rgba(0,0,0,0.6); }
+        .knight-head { font-size: 1.5rem; color: var(--knight-color); }
+
+        .history { background: #222; padding: 15px; border-radius: 10px; width: 180px; height: 400px; display: flex; flex-direction: column; }
+        #moveList { flex-grow: 1; overflow-y: auto; padding-left: 25px; font-family: monospace; color: #2ecc71; margin: 10px 0; scroll-behavior: smooth; }
+        
+        input { width: 45px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #000; color: white; text-align: center; }
+        button { padding: 8px 15px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; }
+        .btn-solve { background: var(--accent); color: white; }
+        .btn-reset { background: var(--reset); color: white; }
+        button:disabled { background: #555; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <h2>Animated Knight's Tour</h2>
+
+    <div class="controls">
+        File (A-H): <input type="text" id="fileIn" value="A" maxlength="1" style="text-transform:uppercase">
+        Rank (1-8): <input type="number" id="rankIn" value="1" min="1" max="8">
+        Speed (ms): <input type="number" id="speed" value="100" min="10" max="1000">
+        <button id="solveBtn" class="btn-solve" onclick="startTour()">Start Animation</button>
+        <button class="btn-reset" onclick="resetBoard()">Reset</button>
+    </div>
+
+    <div class="board-layout">
+        <div class="board-wrapper">
+            <div class="rank-labels">
+                <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+            </div>
+            <div id="board" class="grid"></div>
+            <div class="file-labels">
+                <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span>
+            </div>
+        </div>
+
+        <div class="history">
+            <h4 style="margin:0">Move Order</h4>
+            <ol id="moveList"></ol>
+        </div>
+    </div>
+
+    <script>
+        const N = 8;
+        const dr = [-2, -1, 1, 2, 2, 1, -1, -2];
+        const dc = [1, 2, 2, 1, -1, -2, -2, -1];
+        const files = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        let animationRunning = false;
+
+        function initGrid() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${(r + c) % 2 === 0 ? 'white' : 'black'}`;
+                    cell.id = `c-${r}-${c}`;
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        async function startTour() {
+            if (animationRunning) return;
+            resetBoard();
+            
+            const startF = document.getElementById('fileIn').value.toUpperCase();
+            const startR = parseInt(document.getElementById('rankIn').value);
+            const speed = parseInt(document.getElementById('speed').value);
+            
+            let c = files.indexOf(startF);
+            let r = 8 - startR;
+
+            if (c === -1 || r < 0 || r > 7) {
+                alert("Invalid square.");
+                return;
+            }
+
+            animationRunning = true;
+            document.getElementById('solveBtn').disabled = true;
+
+            let grid = Array.from({ length: N }, () => Array(N).fill(-1));
+            let path = [];
+            
+            // Calculate the full path first using Warnsdorff's
+            let currR = r, currC = c;
+            grid[currR][currC] = 1;
+            path.push({r: currR, c: currC, val: 1});
+
+            for (let i = 2; i <= 64; i++) {
+                let next = getBestNextMove(currR, currC, grid);
+                if (!next) break;
+                currR = next.r;
+                currC = next.c;
+                grid[currR][currC] = i;
+                path.push({r: currR, c: currC, val: i});
+            }
+
+            // Animate the path
+            for (let i = 0; i < path.length; i++) {
+                if (!animationRunning) break;
+                await animateStep(path[i].r, path[i].c, path[i].val, speed);
+            }
+
+            animationRunning = false;
+            document.getElementById('solveBtn').disabled = false;
+        }
+
+        function getBestNextMove(r, c, grid) {
+            let bestR = -1, bestC = -1, minDegree = 9;
+            let moves = [0,1,2,3,4,5,6,7].sort(() => Math.random() - 0.5);
+
+            for (let i of moves) {
+                let nr = r + dr[i], nc = c + dc[i];
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && grid[nr][nc] === -1) {
+                    let deg = 0;
+                    for (let j = 0; j < 8; j++) {
+                        let nnr = nr + dr[j], nnc = nc + dc[j];
+                        if (nnr >= 0 && nnr < 8 && nnc >= 0 && nnc < 8 && grid[nnr][nnc] === -1) deg++;
+                    }
+                    if (deg < minDegree) {
+                        minDegree = deg;
+                        bestR = nr;
+                        bestC = nc;
+                    }
+                }
+            }
+            return bestR === -1 ? null : { r: bestR, c: bestC };
+        }
+
+        function animateStep(r, c, val, delay) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    // Remove previous knight icon
+                    const prevKnight = document.querySelector('.knight-head');
+                    if (prevKnight) prevKnight.remove();
+                    
+                    // Remove previous active highlight
+                    const prevActive = document.querySelector('.active-knight');
+                    if (prevActive) prevActive.classList.remove('active-knight');
+
+                    const cell = document.getElementById(`c-${r}-${c}`);
+                    cell.innerHTML = `<span class="knight-head">♞</span> <span class="visited">${val}</span>`;
+                    cell.classList.add('active-knight');
+
+                    const li = document.createElement('li');
+                    li.innerText = `${files[c]}${8 - r}`;
+                    const list = document.getElementById('moveList');
+                    list.appendChild(li);
+                    list.scrollTop = list.scrollHeight;
+
+                    resolve();
+                }, delay);
+            });
+        }
+
+        function resetBoard() {
+            animationRunning = false;
+            document.getElementById('solveBtn').disabled = false;
+            initGrid();
+            document.getElementById('moveList').innerHTML = '';
+        }
+
+        initGrid();
+    </script>
+</body>
+</html>

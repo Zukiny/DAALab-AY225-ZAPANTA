@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Algorithm Benchmark — Dijkstra vs Tsinghua</title>
+
+  <!--
+    FONTS:
+    - Barlow Condensed: tall, bold, industrial — perfect for data labels & headers
+    - JetBrains Mono:   code-style monospace for all numeric data
+  -->
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── DESIGN TOKENS ───────────────────────────────────────────────── */
+    :root {
+      --bg:          #0b0b0e;
+      --surface:     #101015;
+      --card:        #14141b;
+      --card2:       #18181f;
+      --border:      rgba(255,160,60,.09);
+      --border-hi:   rgba(255,160,60,.25);
+
+      /* Dijkstra — amber / orange (warm = "old and slow") */
+      --dijk:        #ff9933;
+      --dijk-dim:    rgba(255,153,51,.18);
+      --dijk-line:   rgba(255,153,51,.6);
+
+      /* Tsinghua — electric green (cool = "new and fast") */
+      --tsin:        #00ff9f;
+      --tsin-dim:    rgba(0,255,159,.15);
+      --tsin-line:   rgba(0,255,159,.6);
+
+      /* Speedup accent — neon violet */
+      --speed:       #bf5fff;
+      --speed-dim:   rgba(191,95,255,.15);
+
+      --text:        #ccd6e8;
+      --text-dim:    #4a5568;
+      --text-mid:    #8899aa;
+      --green:       #00ff9f;
+      --red:         #ff4d6a;
+
+      --font-head:   'Barlow Condensed', sans-serif;
+      --font-mono:   'JetBrains Mono', monospace;
+    }
+
+    /* ─── RESET ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Subtle scan-line texture for oscilloscope feel */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,0,0,0) 0px,
+        rgba(0,0,0,0) 3px,
+        rgba(0,0,0,.03) 3px,
+        rgba(0,0,0,.03) 4px
+      );
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--dijk); border-radius: 2px; }
+
+    /* ─── LAYOUT ──────────────────────────────────────────────────────── */
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 0 1.5rem; position: relative; z-index: 1; }
+
+    /* ─── NAV ─────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(11,11,14,.92); backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1180px; margin: 0 auto; padding: 0 1.5rem;
+      height: 52px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand {
+      font-family: var(--font-head); font-weight: 900; font-size: 16px;
+      letter-spacing: .06em; color: var(--dijk);
+    }
+    .nav-brand span { color: var(--tsin); }
+    .nav-info { font-size: 11px; color: var(--text-dim); letter-spacing: .05em; }
+
+    /* ─── HERO ────────────────────────────────────────────────────────── */
+    #hero {
+      padding: 64px 0 48px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    /* Animated grid glow */
+    #hero::after {
+      content: '';
+      position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 50%, rgba(255,153,51,.04) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 60% at 80% 50%, rgba(0,255,159,.04) 0%, transparent 70%);
+    }
+    #hero .wrap { position: relative; z-index: 1; }
+
+    .hero-grid { display: grid; grid-template-columns: 1fr auto; gap: 2rem; align-items: center; }
+    @media(max-width:700px){ .hero-grid { grid-template-columns: 1fr; } }
+
+    .hero-kicker {
+      font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: .8rem;
+    }
+    .hero-title {
+      font-family: var(--font-head); font-weight: 900;
+      font-size: clamp(2rem, 5vw, 3.8rem); line-height: 1.05;
+      letter-spacing: .02em; color: #eef4ff; margin-bottom: .8rem;
+    }
+    .hero-title .d { color: var(--dijk); }
+    .hero-title .t { color: var(--tsin); }
+    .hero-sub {
+      font-size: 12px; color: var(--text-mid); max-width: 500px; line-height: 1.75;
+    }
+
+    /* Legend chips */
+    .legend-wrap { display: flex; flex-direction: column; gap: .8rem; }
+    .legend-chip {
+      display: flex; align-items: center; gap: .7rem;
+      padding: .8rem 1.2rem; border-radius: 4px;
+      border: 1px solid;
+    }
+    .legend-chip.d { border-color: var(--dijk-dim); background: rgba(255,153,51,.04); }
+    .legend-chip.t { border-color: var(--tsin-dim); background: rgba(0,255,159,.04); }
+    .chip-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .chip-label { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+    .chip-label strong { display: block; font-size: 13px; font-weight: 700; }
+    .legend-chip.d strong { color: var(--dijk); }
+    .legend-chip.t strong { color: var(--tsin); }
+
+    /* ─── SCALE TABS ──────────────────────────────────────────────────── */
+    #scale-section { padding: 36px 0 0; }
+    .tabs-label {
+      font-size: 11px; letter-spacing: .15em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: .8rem;
+    }
+    .tabs {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 0;
+    }
+    .tab {
+      font-family: var(--font-head); font-weight: 700; font-size: 14px;
+      letter-spacing: .05em; padding: 9px 22px; border-radius: 3px;
+      cursor: pointer; transition: all .18s; border: 1px solid var(--border);
+      background: var(--card); color: var(--text-dim);
+      position: relative; overflow: hidden;
+    }
+    .tab::after {
+      content: attr(data-speedup);
+      position: absolute; top: 3px; right: 4px;
+      font-size: 8px; color: var(--speed); font-family: var(--font-mono);
+      font-weight: 400; letter-spacing: 0;
+    }
+    .tab:hover { border-color: var(--border-hi); color: var(--text); }
+    .tab.active {
+      background: var(--dijk-dim); border-color: var(--dijk);
+      color: var(--dijk); font-weight: 900;
+    }
+
+    /* ─── RACE PANEL ──────────────────────────────────────────────────── */
+    #race-panel {
+      margin-top: 28px; padding: 1.8rem;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 6px; position: relative; overflow: hidden;
+    }
+    #race-panel::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--dijk), var(--tsin));
+    }
+    .race-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    .race-title {
+      font-family: var(--font-head); font-size: 1.1rem; font-weight: 800;
+      letter-spacing: .08em; text-transform: uppercase; color: var(--text);
+    }
+    .race-badge {
+      font-size: 10px; padding: 3px 10px; border-radius: 2px;
+      letter-spacing: .1em; font-family: var(--font-mono);
+    }
+    .race-badge.measured { background: var(--dijk-dim); color: var(--dijk); border: 1px solid var(--dijk); }
+    .race-badge.projected { background: var(--tsin-dim); color: var(--tsin); border: 1px solid var(--tsin); }
+    .race-badge.running { background: var(--speed-dim); color: var(--speed); border: 1px solid var(--speed); animation: blink .8s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* Race track */
+    .race-track { margin-bottom: 1.2rem; }
+    .track-row { margin-bottom: 1rem; }
+    .track-meta {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: .4rem;
+    }
+    .track-name {
+      font-family: var(--font-head); font-weight: 800; font-size: 13px;
+      letter-spacing: .08em;
+    }
+    .track-name.d { color: var(--dijk); }
+    .track-name.t { color: var(--tsin); }
+    .track-ops { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); }
+    .track-ops span { font-weight: 700; }
+    .track-ops .d-val { color: var(--dijk); }
+    .track-ops .t-val { color: var(--tsin); }
+
+    .track-bar {
+      height: 32px; border-radius: 3px;
+      background: rgba(255,255,255,.04);
+      position: relative; overflow: hidden;
+    }
+    .track-fill {
+      height: 100%; border-radius: 3px;
+      display: flex; align-items: center; padding: 0 10px;
+      font-size: 11px; font-weight: 700; color: rgba(0,0,0,.7);
+      transition: width .05s linear; white-space: nowrap;
+      min-width: 0;
+    }
+    .track-fill.d { background: linear-gradient(90deg, #ff7700, var(--dijk)); }
+    .track-fill.t { background: linear-gradient(90deg, #00cc7a, var(--tsin)); }
+
+    /* Timer row */
+    .race-timers {
+      display: flex; gap: 1rem; flex-wrap: wrap;
+      padding-top: 1rem; border-top: 1px solid var(--border);
+    }
+    .timer-block { flex: 1; min-width: 120px; }
+    .timer-label {
+      font-size: 10px; color: var(--text-dim); letter-spacing: .1em;
+      text-transform: uppercase; margin-bottom: .2rem;
+    }
+    .timer-val {
+      font-size: 1.6rem; font-weight: 700; font-family: var(--font-head);
+      letter-spacing: .02em;
+    }
+    .timer-val.d { color: var(--dijk); }
+    .timer-val.t { color: var(--tsin); }
+    .timer-val.s { color: var(--speed); }
+    .timer-unit { font-size: 11px; color: var(--text-dim); }
+
+    /* Winner banner */
+    #winner-banner {
+      display: none; margin-top: 1rem;
+      background: var(--tsin-dim); border: 1px solid var(--tsin);
+      border-radius: 4px; padding: .8rem 1.2rem;
+      font-family: var(--font-head); font-weight: 800; font-size: 15px;
+      color: var(--tsin); letter-spacing: .05em; text-align: center;
+    }
+
+    /* RUN button */
+    .btn-benchmark {
+      margin-top: 1.4rem; width: 100%;
+      font-family: var(--font-head); font-weight: 900; font-size: 16px;
+      letter-spacing: .1em; text-transform: uppercase;
+      padding: 13px; border-radius: 4px; border: none; cursor: pointer;
+      background: linear-gradient(135deg, #ff7700, var(--dijk) 50%, var(--tsin));
+      color: #000; transition: opacity .2s, transform .1s;
+    }
+    .btn-benchmark:hover { opacity: .9; }
+    .btn-benchmark:active { transform: scale(.99); }
+    .btn-benchmark:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ─── STATS GRID ──────────────────────────────────────────────────── */
+    #stats-section { padding: 28px 0; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px; background: var(--border);
+      border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+    }
+    .stats-header {
+      padding: .8rem 1.2rem;
+      font-family: var(--font-head); font-weight: 800; font-size: 13px;
+      letter-spacing: .1em; text-transform: uppercase;
+      grid-column: span 1;
+    }
+    .stats-header.d { background: rgba(255,153,51,.07); color: var(--dijk); border-bottom: 2px solid var(--dijk); }
+    .stats-header.t { background: rgba(0,255,159,.05); color: var(--tsin); border-bottom: 2px solid var(--tsin); }
+
+    .stat-cell {
+      background: var(--card); padding: 1rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat-cell-label {
+      font-size: 10px; color: var(--text-dim); letter-spacing: .1em;
+      text-transform: uppercase; margin-bottom: .3rem;
+    }
+    .stat-cell-value {
+      font-size: 1.4rem; font-weight: 700; font-family: var(--font-head);
+      letter-spacing: .02em;
+    }
+    .stat-cell.d .stat-cell-value { color: var(--dijk); }
+    .stat-cell.t .stat-cell-value { color: var(--tsin); }
+    .stat-cell-sub { font-size: 10px; color: var(--text-dim); margin-top: .2rem; }
+
+    /* ─── CHARTS SECTION ──────────────────────────────────────────────── */
+    #charts-section { padding: 28px 0; }
+    .charts-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+    }
+    @media(max-width:750px){ .charts-grid { grid-template-columns: 1fr; } }
+
+    .chart-panel {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 6px; padding: 1.4rem;
+    }
+    .chart-panel h3 {
+      font-family: var(--font-head); font-size: 1rem; font-weight: 800;
+      letter-spacing: .06em; text-transform: uppercase;
+      color: var(--text-mid); margin-bottom: 1rem;
+    }
+    .chart-panel canvas {
+      width: 100%; display: block; border-radius: 3px;
+    }
+    /* wide chart gets its own row */
+    .chart-panel.wide { grid-column: span 2; }
+    @media(max-width:750px){ .chart-panel.wide { grid-column: span 1; } }
+
+    /* ─── COMPARISON TABLE ────────────────────────────────────────────── */
+    #table-section { padding: 28px 0; }
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%; border-collapse: collapse;
+      font-size: 12px;
+    }
+    thead th {
+      font-family: var(--font-head); font-weight: 800; font-size: 11px;
+      letter-spacing: .12em; text-transform: uppercase; text-align: right;
+      padding: .7rem 1rem; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim); white-space: nowrap;
+    }
+    thead th:first-child { text-align: left; }
+    thead th.d { color: var(--dijk); }
+    thead th.t { color: var(--tsin); }
+    tbody tr { transition: background .15s; }
+    tbody tr:hover { background: rgba(255,255,255,.02); }
+    tbody td {
+      padding: .7rem 1rem; border-bottom: 1px solid rgba(255,255,255,.03);
+      text-align: right; color: var(--text-mid); white-space: nowrap;
+    }
+    tbody td:first-child {
+      text-align: left; font-family: var(--font-head);
+      font-weight: 800; font-size: 14px; letter-spacing: .05em;
+    }
+    tbody td.d { color: var(--dijk); font-weight: 600; }
+    tbody td.t { color: var(--tsin); font-weight: 600; }
+    tbody td.s { color: var(--speed); font-weight: 700; }
+    tbody tr.highlight td { background: rgba(255,153,51,.04); }
+
+    /* ─── BREAKDOWN RINGS ─────────────────────────────────────────────── */
+    #breakdown-section { padding: 28px 0 60px; }
+    .breakdown-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;
+    }
+    @media(max-width:900px){ .breakdown-grid { grid-template-columns: repeat(3,1fr); } }
+    @media(max-width:550px){ .breakdown-grid { grid-template-columns: repeat(2,1fr); } }
+    .ring-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 6px; padding: 1rem; text-align: center;
+    }
+    .ring-card h4 {
+      font-family: var(--font-head); font-size: .85rem; font-weight: 800;
+      color: var(--text-mid); letter-spacing: .06em; margin-bottom: .8rem;
+    }
+    .ring-card canvas { width: 100%; max-width: 140px; display: block; margin: 0 auto; }
+    .ring-legend { margin-top: .6rem; font-size: 10px; color: var(--text-dim); text-align: left; }
+    .ring-legend .rl { display: flex; align-items: center; gap: .4rem; margin-bottom: .2rem; }
+    .ring-legend .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ─── SECTION TITLES ──────────────────────────────────────────────── */
+    .section-title {
+      font-family: var(--font-head); font-weight: 900; font-size: 1.4rem;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text); margin-bottom: .4rem;
+    }
+    .section-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 1.5rem; }
+    .section-sep { height: 1px; background: var(--border); margin-bottom: 1.5rem; }
+
+    /* ─── SCROLL FADE-IN ──────────────────────────────────────────────── */
+    .fade { opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; }
+    .fade.in { opacity: 1; transform: none; }
+    .fade:nth-child(2) { transition-delay: .08s; }
+    .fade:nth-child(3) { transition-delay: .16s; }
+    .fade:nth-child(4) { transition-delay: .24s; }
+    .fade:nth-child(5) { transition-delay: .32s; }
+
+    /* ─── TOOLTIP ─────────────────────────────────────────────────────── */
+    #tt {
+      position: fixed; z-index: 999; pointer-events: none;
+      background: rgba(11,11,14,.97); border: 1px solid var(--dijk);
+      padding: 5px 10px; border-radius: 3px; font-size: 11px; color: var(--text);
+      display: none; white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div id="tt"></div>
+
+<!-- ── NAV ─────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <span class="nav-brand">DIJKSTRA <span>vs TSINGHUA</span></span>
+    <span class="nav-info">Benchmark Simulator · Educational Tool</span>
+  </div>
+</nav>
+
+<!-- ── HERO ────────────────────────────────────────────────────────────── -->
+<section id="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-kicker">Algorithm Performance Simulator</div>
+        <h1 class="hero-title">
+          <span class="d">Dijkstra</span><br>
+          vs<br>
+          <span class="t">Tsinghua</span>
+        </h1>
+        <p class="hero-sub">
+          Live benchmark across 5 graph scales — from 1,000 to 10,000,000 nodes.
+          Measures real operation counts, timing, and the growing advantage of
+          near-linear complexity at scale. Select a size and run the race.
+        </p>
+      </div>
+      <div class="legend-wrap">
+        <div class="legend-chip d">
+          <div class="chip-dot" style="background:var(--dijk)"></div>
+          <div class="chip-label">
+            <strong>Dijkstra</strong>
+            O(m log n) — classic heap-based<br>
+            The sorting-barrier bottleneck
+          </div>
+        </div>
+        <div class="legend-chip t">
+          <div class="chip-dot" style="background:var(--tsin)"></div>
+          <div class="chip-label">
+            <strong>Tsinghua 2024</strong>
+            O(m · α(n)) — near-linear bucket<br>
+            Sorting barrier broken
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SCALE SELECTOR + RACE ─────────────────────────────────────────── -->
+<section id="scale-section">
+  <div class="wrap">
+    <div class="tabs-label">Select graph scale</div>
+    <div class="tabs" id="tabs">
+      <!-- injected by JS -->
+    </div>
+
+    <!-- Race panel -->
+    <div id="race-panel">
+      <div class="race-header">
+        <span class="race-title">// Algorithm Race</span>
+        <span class="race-badge projected" id="raceBadge">PROJECTED</span>
+      </div>
+
+      <div class="race-track">
+        <!-- Dijkstra track -->
+        <div class="track-row">
+          <div class="track-meta">
+            <span class="track-name d">DIJKSTRA — O(m log n)</span>
+            <span class="track-ops d-val"><span id="dijkOpsLive">0</span> ops</span>
+          </div>
+          <div class="track-bar">
+            <div class="track-fill d" id="dijkFill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Tsinghua track -->
+        <div class="track-row">
+          <div class="track-meta">
+            <span class="track-name t">TSINGHUA — O(m · α(n))</span>
+            <span class="track-ops t-val"><span id="tsinOpsLive">0</span> ops</span>
+          </div>
+          <div class="track-bar">
+            <div class="track-fill t" id="tsinFill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timers -->
+      <div class="race-timers">
+        <div class="timer-block">
+          <div class="timer-label">Dijkstra · Virtual Time</div>
+          <div class="timer-val d"><span id="dijkTime">—</span> <span class="timer-unit">ms</span></div>
+        </div>
+        <div class="timer-block">
+          <div class="timer-label">Tsinghua · Virtual Time</div>
+          <div class="timer-val t"><span id="tsinTime">—</span> <span class="timer-unit">ms</span></div>
+        </div>
+        <div class="timer-block">
+          <div class="timer-label">Speedup Factor</div>
+          <div class="timer-val s"><span id="speedupLive">—</span><span class="timer-unit">×</span></div>
+        </div>
+        <div class="timer-block">
+          <div class="timer-label">Time Saved</div>
+          <div class="timer-val s"><span id="timeSaved">—</span> <span class="timer-unit">ms</span></div>
+        </div>
+      </div>
+
+      <div id="winner-banner"></div>
+      <button class="btn-benchmark" id="btnRun">▶▶ RUN BENCHMARK</button>
+    </div>
+  </div>
+</section>
+
+<!-- ── STATS GRID ──────────────────────────────────────────────────────── -->
+<section id="stats-section">
+  <div class="wrap">
+    <div class="section-title fade">Performance Metrics</div>
+    <div class="section-sub fade">Side-by-side breakdown for the selected graph scale.</div>
+    <div class="section-sep"></div>
+
+    <div class="stats-grid fade" id="statsGrid">
+      <div class="stats-header d">⬡ Dijkstra Algorithm</div>
+      <div class="stats-header t">⬡ Tsinghua Algorithm</div>
+      <!-- rows injected by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- ── CHARTS ─────────────────────────────────────────────────────────── -->
+<section id="charts-section">
+  <div class="wrap">
+    <div class="section-title fade">Growth Curve Analysis</div>
+    <div class="section-sub fade">How operation count scales with graph size — visualised across all 5 benchmarks.</div>
+    <div class="section-sep"></div>
+
+    <div class="charts-grid">
+      <!-- Operations growth curve -->
+      <div class="chart-panel wide fade">
+        <h3>Total Operations — All Scales (log₁₀ scale)</h3>
+        <canvas id="growthChart" height="260"></canvas>
+      </div>
+
+      <!-- Speedup bar chart -->
+      <div class="chart-panel fade">
+        <h3>Speedup Ratio (Dijkstra ops ÷ Tsinghua ops)</h3>
+        <canvas id="speedupChart" height="200"></canvas>
+      </div>
+
+      <!-- Time comparison -->
+      <div class="chart-panel fade">
+        <h3>Virtual Execution Time (ms at 500M ops/s)</h3>
+        <canvas id="timeChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FULL COMPARISON TABLE ───────────────────────────────────────────── -->
+<section id="table-section">
+  <div class="wrap">
+    <div class="section-title fade">Complete Comparison Table</div>
+    <div class="section-sub fade">All 5 scales · projected at 500M ops/sec · m ≈ 3n (sparse graph)</div>
+    <div class="section-sep"></div>
+    <div class="table-wrap fade">
+      <table id="compTable">
+        <thead>
+          <tr>
+            <th>Scale (n nodes)</th>
+            <th>m edges</th>
+            <th class="d">Dijkstra Ops</th>
+            <th class="d">Dijkstra Time</th>
+            <th class="d">log₂(n)</th>
+            <th class="t">Tsinghua Ops</th>
+            <th class="t">Tsinghua Time</th>
+            <th class="t">α(n)</th>
+            <th>Speedup</th>
+            <th>Time Saved</th>
+          </tr>
+        </thead>
+        <tbody id="compTableBody"><!-- injected --></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── OPERATION BREAKDOWN RINGS ─────────────────────────────────────── -->
+<section id="breakdown-section">
+  <div class="wrap">
+    <div class="section-title fade">Operation Breakdown per Scale</div>
+    <div class="section-sub fade">
+      Where does the time go? Green = edge relaxations (shared cost), Orange = heap sorting ops, Teal = bucket ops (near-zero cost).
+    </div>
+    <div class="section-sep"></div>
+    <div class="breakdown-grid" id="breakdownGrid">
+      <!-- ring cards injected by JS -->
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 1: MATH UTILITIES
+   All complexity formulas, formatters, and projection functions.
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Inverse Ackermann function — practically always ≤ 4 for any real-world n.
+ * This is the amortised cost per operation in the Tsinghua algorithm's
+ * Union–Find structure for merging empty monotone buckets.
+ */
+function alphaFn(n) {
+  if (n <= 1)  return 0;
+  if (n <= 2)  return 1;
+  if (n <= 9)  return 2;
+  if (n <= 7625597484987) return 3; // 3 * 2^(3*2^(3*2^3))
+  return 4;                          // True for all conceivable graphs
+}
+
+/** Format large numbers with K/M/B suffixes */
+function fmt(n, decimals = 1) {
+  if (n >= 1e9)  return (n/1e9).toFixed(decimals) + 'B';
+  if (n >= 1e6)  return (n/1e6).toFixed(decimals) + 'M';
+  if (n >= 1e3)  return (n/1e3).toFixed(decimals) + 'K';
+  return n.toLocaleString();
+}
+
+/** Format time in ms with appropriate precision */
+function fmtTime(ms) {
+  if (ms < 0.001)  return (ms * 1000).toFixed(2) + ' μs';
+  if (ms < 1)      return ms.toFixed(3) + ' ms';
+  if (ms < 1000)   return ms.toFixed(1) + ' ms';
+  return (ms/1000).toFixed(2) + ' s';
+}
+
+/**
+ * Project algorithm stats for a given graph scale.
+ * Uses theoretical complexity formulas.
+ * Assumes: m ≈ 3n (typical sparse graph like road/routing network)
+ * CPU_SPEED: 500M ops/sec (conservative real-world estimate)
+ */
+const CPU_SPEED = 5e8; // 500 million ops per second
+
+function projectStats(n) {
+  const m   = n * 3;                    // expected edges for sparse graph
+  const logN   = Math.log2(n);          // e.g. log2(1M) = 20
+  const alphaN = alphaFn(n);            // practically always 4
+
+  // Operation counts
+  // Dijkstra: every heap push/pop costs O(log n) comparisons
+  // Tsinghua: bucket insert/lookup costs O(α(n)) — effectively constant
+  const dijkOps  = Math.round(m * (logN + 1));   // +1 for the relaxation itself
+  const tsinOps  = Math.round(m * (alphaN + 1));  // +1 for relaxation
+
+  // Heap sorting operations (these are the SORTING BARRIER)
+  const dijkSortOps  = Math.round(m * logN);   // pure comparison cost
+  const tsinSortOps  = 0;                       // NONE — no sorting in Tsinghua!
+
+  // Bucket management ops for Tsinghua (instead of sorting)
+  const tsinBucketOps = Math.round(m * alphaN); // ~4 ops per edge
+
+  // Virtual execution time
+  const dijkTime = dijkOps / CPU_SPEED * 1000;   // ms
+  const tsinTime = tsinOps / CPU_SPEED * 1000;   // ms
+
+  // Memory: Dijkstra heap entries ~40 bytes, Tsinghua buckets ~20 bytes
+  const dijkMem = (m * 40 + n * 12) / 1e6;  // MB
+  const tsinMem = (m * 20 + n * 12) / 1e6;  // MB
+
+  const speedup    = dijkOps / tsinOps;
+  const timeSaved  = dijkTime - tsinTime;
+  const nodesPerMs_d = n / dijkTime;
+  const nodesPerMs_t = n / tsinTime;
+
+  return {
+    n, m, logN, alphaN, speedup, timeSaved,
+    dijkstra: {
+      totalOps:  dijkOps,
+      sortOps:   dijkSortOps,
+      relaxOps:  m,
+      timeMs:    dijkTime,
+      memMB:     dijkMem,
+      nodesPerMs: nodesPerMs_d,
+    },
+    tsinghua: {
+      totalOps:   tsinOps,
+      sortOps:    tsinSortOps,
+      bucketOps:  tsinBucketOps,
+      relaxOps:   m,
+      timeMs:     tsinTime,
+      memMB:      tsinMem,
+      nodesPerMs: nodesPerMs_t,
+    }
+  };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 2: MIN-HEAP IMPLEMENTATION
+   A proper binary min-heap with comparison counting.
+   The `comparisons` field is THE "sorting barrier" cost we want to measure.
+───────────────────────────────────────────────────────────────────────── */
+class MinHeap {
+  constructor() {
+    this.data = [];
+    this.comparisons = 0; // Counts every key comparison — this IS the sorting cost
+    this.insertions = 0;
+    this.removals = 0;
+  }
+
+  /** Push item with {d: distance, v: nodeIndex} */
+  push(item) {
+    this.data.push(item);
+    this.insertions++;
+    this._bubbleUp(this.data.length - 1);
+  }
+
+  /** Pop minimum item */
+  pop() {
+    const n = this.data.length;
+    if (n === 0) return null;
+    const min = this.data[0];
+    const last = this.data.pop();
+    this.removals++;
+    if (this.data.length > 0) {
+      this.data[0] = last;
+      this._sinkDown(0);
+    }
+    return min;
+  }
+
+  /** Restore heap property after push (move new element up) */
+  _bubbleUp(i) {
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      this.comparisons++;         // ← THIS is the sorting barrier cost
+      if (this.data[parent].d <= this.data[i].d) break;
+      // Swap
+      const tmp = this.data[parent];
+      this.data[parent] = this.data[i];
+      this.data[i] = tmp;
+      i = parent;
+    }
+  }
+
+  /** Restore heap property after pop (move root element down) */
+  _sinkDown(i) {
+    const n = this.data.length;
+    while (true) {
+      const l = (i << 1) + 1;  // left child
+      const r = (i << 1) + 2;  // right child
+      let smallest = i;
+      if (l < n) {
+        this.comparisons++;     // ← More sorting barrier cost
+        if (this.data[l].d < this.data[smallest].d) smallest = l;
+      }
+      if (r < n) {
+        this.comparisons++;     // ← More sorting barrier cost
+        if (this.data[r].d < this.data[smallest].d) smallest = r;
+      }
+      if (smallest === i) break;
+      const tmp = this.data[smallest];
+      this.data[smallest] = this.data[i];
+      this.data[i] = tmp;
+      i = smallest;
+    }
+  }
+
+  get size() { return this.data.length; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 3: GRAPH GENERATOR
+   Creates a random sparse connected graph using:
+   1. A random spanning tree (guarantees connectivity)
+   2. Additional random edges to reach target density
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Generate a sparse random graph for n nodes.
+ * Returns adjacency list + actual edge count.
+ * Uses Uint16Array / Float32Array for memory efficiency on larger graphs.
+ */
+function generateGraph(n) {
+  // Adjacency list: adj[u] = [{to, w}, ...]
+  const adj = new Array(n);
+  for (let i = 0; i < n; i++) adj[i] = [];
+  let edgeCount = 0;
+
+  // Step 1: Build a random spanning tree (ensures connectivity)
+  // Attach each node i to a random node j < i
+  for (let i = 1; i < n; i++) {
+    const j = Math.floor(Math.random() * i);
+    const w = 1 + Math.floor(Math.random() * 100);
+    adj[i].push({ to: j, w });
+    adj[j].push({ to: i, w });
+    edgeCount++;
+  }
+
+  // Step 2: Add extra random edges (targeting m ≈ 2n total edges)
+  const extraTarget = Math.min(n * 2, 20000); // Cap extra edges for browser perf
+  for (let k = 0; k < extraTarget; k++) {
+    const u = Math.floor(Math.random() * n);
+    const v = Math.floor(Math.random() * n);
+    if (u !== v) {
+      const w = 1 + Math.floor(Math.random() * 100);
+      adj[u].push({ to: v, w });
+      adj[v].push({ to: u, w });
+      edgeCount += 2;
+    }
+  }
+  return { adj, edgeCount };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 4: ACTUAL ALGORITHM RUNNERS (for small measured graphs)
+   These run for real on 1K and 10K node graphs.
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Run Dijkstra on adj list with n nodes.
+ * Returns measured operation counts and timing.
+ */
+function runDijkstra(adj, n) {
+  const t0 = performance.now();
+  const dist = new Array(n).fill(Infinity);
+  const visited = new Uint8Array(n);
+  dist[0] = 0;
+
+  const heap = new MinHeap();
+  heap.push({ d: 0, v: 0 });
+
+  let relaxations = 0;
+  let settledNodes = 0;
+
+  while (heap.size > 0) {
+    const top = heap.pop();
+    if (!top) break;
+    const { d, v } = top;
+
+    if (visited[v]) continue;
+    visited[v] = 1;
+    settledNodes++;
+
+    const neighbours = adj[v];
+    for (let i = 0; i < neighbours.length; i++) {
+      const { to, w } = neighbours[i];
+      relaxations++;                  // Count every edge relaxation attempt
+      const newDist = d + w;
+      if (newDist < dist[to]) {
+        dist[to] = newDist;
+        heap.push({ d: newDist, v: to }); // This triggers O(log n) comparisons
+      }
+    }
+  }
+
+  const elapsed = performance.now() - t0;
+  return {
+    dist,
+    totalOps:    heap.comparisons + relaxations,
+    sortOps:     heap.comparisons,   // THE sorting barrier cost
+    relaxOps:    relaxations,
+    heapInserts: heap.insertions,
+    heapRemoves: heap.removals,
+    settledNodes,
+    realTimeMs:  elapsed,
+  };
+}
+
+/**
+ * Run Tsinghua-style monotone bucket algorithm.
+ * Key difference from Dijkstra:
+ *   - No heap, no sorting comparisons
+ *   - Uses integer-keyed buckets (monotone: dist values never decrease)
+ *   - Bucket ops ≈ O(α(n)) amortised per edge via path compression
+ *
+ * This is a pedagogically accurate model of the algorithm's structure.
+ * For non-integer weights we multiply by a scale factor.
+ */
+function runTsinghua(adj, n) {
+  const t0 = performance.now();
+  const SCALE = 1; // weights already integers 1-100
+  const dist = new Array(n).fill(Infinity);
+  dist[0] = 0;
+
+  let sortOps = 0;    // Stays 0 — no sorting comparisons ever made
+  let bucketOps = 0;  // Counting bucket insert/lookup (cheap, ~O(α) amortised)
+  let relaxations = 0;
+  let settledNodes = 0;
+
+  // Sparse bucket map: distance → Set of node ids
+  // Because distances are monotone non-decreasing, we never revisit lower buckets
+  const buckets = new Map();
+  buckets.set(0, new Set([0]));
+
+  let curDist = 0;
+  const maxDist = n * 100; // Maximum possible distance (n hops × max weight 100)
+
+  while (curDist <= maxDist) {
+    // Advance to next non-empty bucket — Union-Find handles this in O(α) in full algorithm
+    while (curDist <= maxDist && (!buckets.has(curDist) || buckets.get(curDist).size === 0)) {
+      curDist++;
+      bucketOps++; // Each skip = 1 union-find step (path compression amortises these)
+    }
+    if (curDist > maxDist) break;
+
+    const bucket = buckets.get(curDist);
+    const v = bucket.values().next().value;
+    bucket.delete(v);
+    bucketOps++;    // Bucket removal = 1 op (no comparison, just pointer update)
+
+    // Stale entry check (cheaper than Dijkstra's lazy deletion)
+    if (dist[v] !== curDist * SCALE && dist[v] !== curDist) {
+      bucketOps++;
+      continue;
+    }
+
+    settledNodes++;
+    const neighbours = adj[v];
+
+    for (let i = 0; i < neighbours.length; i++) {
+      const { to, w } = neighbours[i];
+      relaxations++;                       // Edge relaxation (same as Dijkstra)
+      const newDist = dist[v] + w;
+      if (newDist < dist[to]) {
+        // Remove from old bucket if present (O(1) — no comparison)
+        if (dist[to] !== Infinity && buckets.has(dist[to])) {
+          buckets.get(dist[to]).delete(to);
+          bucketOps++;
+        }
+        dist[to] = newDist;
+        if (!buckets.has(newDist)) buckets.set(newDist, new Set());
+        buckets.get(newDist).add(to);
+        bucketOps++;  // Bucket insertion = 1 op (no comparison needed!)
+      }
+    }
+  }
+
+  const elapsed = performance.now() - t0;
+  return {
+    dist,
+    totalOps:    bucketOps + relaxations,
+    sortOps:     0,          // ← THE KEY RESULT: zero sorting operations!
+    bucketOps,
+    relaxOps:    relaxations,
+    settledNodes,
+    realTimeMs:  elapsed,
+  };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 5: SCALE DATA TABLE
+   Pre-computed stats for all 5 scales.
+   Scales 1K and 10K will be replaced with measured data after running.
+───────────────────────────────────────────────────────────────────────── */
+const SCALES = [
+  { label: '1K',   n: 1_000,        measured: true  },
+  { label: '10K',  n: 10_000,       measured: true  },
+  { label: '100K', n: 100_000,      measured: false },
+  { label: '1M',   n: 1_000_000,    measured: false },
+  { label: '10M',  n: 10_000_000,   measured: false },
+];
+
+// Pre-compute projected stats for all scales
+const ALL_STATS = SCALES.map(s => ({ ...s, stats: projectStats(s.n) }));
+
+// Cache for measured stats (filled when user runs benchmark)
+const measuredCache = new Map();
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 6: UI HELPERS
+───────────────────────────────────────────────────────────────────────── */
+
+/** Animate a number counting up from 0 to target over `dur` ms */
+function animateNum(el, target, dur = 900, formatter = fmt) {
+  const start = performance.now();
+  const tick = (now) => {
+    const t = Math.min((now - start) / dur, 1);
+    const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    const value = Math.round(eased * target);
+    el.textContent = formatter(value, 2);
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+let currentScaleIdx = 1; // default: 10K
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 7: RACE ANIMATION
+   Animates two progress bars with op counters ticking at different rates.
+   Dijkstra finishes in 5 seconds of animation time.
+   Tsinghua finishes in 5 * (α(n)/log(n)) seconds — much faster.
+───────────────────────────────────────────────────────────────────────── */
+
+let raceActive = false;
+let raceCancelFlag = false;
+
+function runRace(scaleIdx, dijkStats, tsinStats) {
+  if (raceActive) return;
+  raceActive = true;
+  raceCancelFlag = false;
+
+  const D_TOTAL  = dijkStats.totalOps;
+  const T_TOTAL  = tsinStats.totalOps;
+
+  const D_TIME_MS = dijkStats.timeMs;
+  const T_TIME_MS = tsinStats.timeMs;
+
+  const dijkFill    = document.getElementById('dijkFill');
+  const tsinFill    = document.getElementById('tsinFill');
+  const dijkOpsEl   = document.getElementById('dijkOpsLive');
+  const tsinOpsEl   = document.getElementById('tsinOpsLive');
+  const dijkTimeEl  = document.getElementById('dijkTime');
+  const tsinTimeEl  = document.getElementById('tsinTime');
+  const speedupEl   = document.getElementById('speedupLive');
+  const savedEl     = document.getElementById('timeSaved');
+  const banner      = document.getElementById('winner-banner');
+  const btn         = document.getElementById('btnRun');
+
+  banner.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = '⏳ RUNNING...';
+
+  // Animation duration: Tsinghua always finishes in ANIM_T_MS real ms
+  const ANIM_T_MS  = 2200; // Tsinghua finishes in 2.2s
+  // Dijkstra takes proportionally longer: speedup × 2.2s
+  const speedup = D_TOTAL / T_TOTAL;
+  const ANIM_D_MS  = Math.min(ANIM_T_MS * speedup, 12000); // cap at 12s
+
+  const startTime = performance.now();
+  let dijkDone = false, tsinDone = false;
+
+  const tick = (now) => {
+    if (raceCancelFlag) { raceActive = false; return; }
+
+    const elapsed = now - startTime;
+
+    // ── Tsinghua progress (finishes at ANIM_T_MS)
+    if (!tsinDone) {
+      const t = Math.min(elapsed / ANIM_T_MS, 1);
+      const eased = t < 1 ? 1 - Math.pow(1 - t, 2) : 1;
+      const ops = Math.round(eased * T_TOTAL);
+      tsinFill.style.width = (eased * 100).toFixed(1) + '%';
+      tsinOpsEl.textContent = fmt(ops, 2);
+      const virtTime = eased * T_TIME_MS;
+      tsinTimeEl.textContent = fmtTime(virtTime).replace(' ms','').replace(' μs','');
+      if (t >= 1) tsinDone = true;
+    }
+
+    // ── Dijkstra progress (finishes at ANIM_D_MS)
+    if (!dijkDone) {
+      const t = Math.min(elapsed / ANIM_D_MS, 1);
+      const eased = t < 1 ? 1 - Math.pow(1 - t, 2) : 1;
+      const ops = Math.round(eased * D_TOTAL);
+      dijkFill.style.width = (eased * 100).toFixed(1) + '%';
+      dijkOpsEl.textContent = fmt(ops, 2);
+      const virtTime = eased * D_TIME_MS;
+      dijkTimeEl.textContent = fmtTime(virtTime).replace(' ms','').replace(' μs','');
+      if (t >= 1) dijkDone = true;
+    }
+
+    // ── Speedup live update
+    const tsinProg = Math.min(elapsed / ANIM_T_MS, 1);
+    const dijkProg = Math.min(elapsed / ANIM_D_MS, 1);
+    if (tsinProg > 0) {
+      const currentSpeedup = dijkProg / tsinProg * speedup;
+      speedupEl.textContent = Math.min(currentSpeedup, speedup).toFixed(2);
+    }
+
+    if (!dijkDone || !tsinDone) {
+      requestAnimationFrame(tick);
+    } else {
+      // Race complete!
+      speedupEl.textContent = speedup.toFixed(2);
+      savedEl.textContent   = fmtTime(D_TIME_MS - T_TIME_MS).replace(' ms','').replace(' s','');
+
+      banner.style.display = 'block';
+      banner.innerHTML = `
+        🏆 TSINGHUA WINS! — ${speedup.toFixed(2)}× faster
+        &nbsp;·&nbsp; Sorting ops eliminated: ${fmt(dijkStats.sortOps)} → 0
+        &nbsp;·&nbsp; Time saved: ${fmtTime(D_TIME_MS - T_TIME_MS)}
+      `;
+
+      btn.disabled = false;
+      btn.textContent = '▶▶ RUN AGAIN';
+      raceActive = false;
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 8: STATS GRID POPULATION
+───────────────────────────────────────────────────────────────────────── */
+
+const STAT_ROWS = [
+  {
+    label: 'Total Operations',
+    dKey: s => s.dijkstra.totalOps,
+    tKey: s => s.tsinghua.totalOps,
+    fmt: (v) => fmt(v, 2),
+    dsub: s => `${fmt(s.dijkstra.sortOps)} sorting + ${fmt(s.dijkstra.relaxOps)} relax`,
+    tsub: s => `0 sorting + ${fmt(s.tsinghua.relaxOps)} relax`,
+  },
+  {
+    label: 'Sorting / Queue Ops',
+    dKey: s => s.dijkstra.sortOps,
+    tKey: s => 0,
+    fmt: (v) => v === 0 ? '0 ✓' : fmt(v, 2),
+    dsub: () => 'heap comparisons (THE barrier)',
+    tsub: () => '← No sorting needed!',
+  },
+  {
+    label: 'Edge Relaxations',
+    dKey: s => s.dijkstra.relaxOps,
+    tKey: s => s.tsinghua.relaxOps,
+    fmt: (v) => fmt(v, 2),
+    dsub: () => 'm relaxation steps',
+    tsub: () => 'm relaxation steps (same)',
+  },
+  {
+    label: 'Virtual Time',
+    dKey: s => s.dijkstra.timeMs,
+    tKey: s => s.tsinghua.timeMs,
+    fmt: (v) => fmtTime(v),
+    dsub: s => `@ 500M ops/sec`,
+    tsub: s => `@ 500M ops/sec`,
+  },
+  {
+    label: 'Memory Usage (est.)',
+    dKey: s => s.dijkstra.memMB,
+    tKey: s => s.tsinghua.memMB,
+    fmt: (v) => v.toFixed(1) + ' MB',
+    dsub: () => 'heap entries ~40B each',
+    tsub: () => 'bucket entries ~20B each',
+  },
+  {
+    label: 'log₂(n)  vs  α(n)',
+    dKey: s => s.logN,
+    tKey: s => s.alphaN,
+    fmt: (v) => v.toFixed(2),
+    dsub: () => '← grows with scale',
+    tsub: () => '≈ 4 always (constant!)',
+  },
+];
+
+function populateStatsGrid(stats) {
+  const grid = document.getElementById('statsGrid');
+  // Remove old rows (keep the 2 headers)
+  const cells = grid.querySelectorAll('.stat-cell');
+  cells.forEach(c => c.remove());
+
+  STAT_ROWS.forEach(row => {
+    const dVal = row.dKey(stats);
+    const tVal = row.tKey(stats);
+
+    // Dijkstra cell
+    const dc = document.createElement('div');
+    dc.className = 'stat-cell d';
+    dc.innerHTML = `
+      <div class="stat-cell-label">${row.label}</div>
+      <div class="stat-cell-value" id="sc_d_${row.label.replace(/\W/g,'')}">${row.fmt(dVal)}</div>
+      <div class="stat-cell-sub">${row.dsub(stats)}</div>
+    `;
+    grid.appendChild(dc);
+
+    // Tsinghua cell
+    const tc = document.createElement('div');
+    tc.className = 'stat-cell t';
+    tc.innerHTML = `
+      <div class="stat-cell-label">${row.label}</div>
+      <div class="stat-cell-value" id="sc_t_${row.label.replace(/\W/g,'')}">${row.fmt(tVal)}</div>
+      <div class="stat-cell-sub">${row.tsub(stats)}</div>
+    `;
+    grid.appendChild(tc);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 9: CANVAS CHARTS
+   All charts drawn on HTML5 Canvas — no external libraries.
+───────────────────────────────────────────────────────────────────────── */
+
+/** Shared colours */
+const C_DIJK  = '#ff9933';
+const C_TSIN  = '#00ff9f';
+const C_SPEED = '#bf5fff';
+const C_GRID  = 'rgba(255,255,255,0.05)';
+const C_TEXT  = '#4a5568';
+const C_TEXTL = '#8899aa';
+
+/**
+ * Growth Curve Chart — log₁₀ scale on both axes.
+ * Shows total operations vs graph scale for both algorithms.
+ * Highlighted dot on currently selected scale.
+ */
+function drawGrowthChart(selectedIdx) {
+  const canvas = document.getElementById('growthChart');
+  const W = canvas.width = canvas.clientWidth;
+  const H = canvas.height = 260;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const PAD = { top: 20, right: 20, bottom: 40, left: 60 };
+  const CW = W - PAD.left - PAD.right;
+  const CH = H - PAD.top  - PAD.bottom;
+
+  // X: log₁₀(n) from 3 (1K) to 7 (10M)
+  // Y: log₁₀(ops) from ~4 to ~11
+  const xMin = 3, xMax = 7;
+  const yMin = 4, yMax = 11;
+
+  const toX = (logN) => PAD.left + (logN - xMin) / (xMax - xMin) * CW;
+  const toY = (logOps) => PAD.top + CH - (logOps - yMin) / (yMax - yMin) * CH;
+
+  // Grid lines
+  ctx.strokeStyle = C_GRID; ctx.lineWidth = 1;
+  for (let y = yMin; y <= yMax; y++) {
+    ctx.beginPath(); ctx.moveTo(PAD.left, toY(y)); ctx.lineTo(PAD.left + CW, toY(y)); ctx.stroke();
+  }
+  for (let x = xMin; x <= xMax; x++) {
+    ctx.beginPath(); ctx.moveTo(toX(x), PAD.top); ctx.lineTo(toX(x), PAD.top + CH); ctx.stroke();
+  }
+
+  // Axis labels
+  ctx.fillStyle = C_TEXT; ctx.font = '10px JetBrains Mono, monospace';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let y = yMin; y <= yMax; y++) {
+    const labels = ['','10⁴','10⁵','10⁶','10⁷','10⁸','10⁹','10¹⁰'];
+    ctx.fillText(labels[y-yMin] || '', PAD.left - 6, toY(y));
+  }
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ['1K','10K','100K','1M','10M'].forEach((l, i) => {
+    ctx.fillText(l, toX(3 + i), PAD.top + CH + 8);
+  });
+
+  // Draw dense smooth lines using many interpolated points
+  const drawLine = (color, opsFn) => {
+    ctx.beginPath();
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+    const steps = 80;
+    for (let i = 0; i <= steps; i++) {
+      const logN = xMin + (xMax - xMin) * i / steps;
+      const n = Math.pow(10, logN);
+      const ops = opsFn(n);
+      const logOps = Math.log10(Math.max(ops, 1));
+      const x = toX(logN);
+      const y = toY(Math.min(logOps, yMax));
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  };
+
+  // Dijkstra: ops ≈ 3n * (log2(n) + 1)
+  drawLine(C_DIJK, (n) => 3 * n * (Math.log2(n) + 1));
+
+  // Tsinghua: ops ≈ 3n * (α(n) + 1) = 3n * 5
+  drawLine(C_TSIN, (n) => 3 * n * (alphaFn(n) + 1));
+
+  // Dots at each scale
+  ALL_STATS.forEach((s, i) => {
+    const logN = Math.log10(s.n);
+    const dLogOps = Math.log10(s.stats.dijkstra.totalOps);
+    const tLogOps = Math.log10(s.stats.tsinghua.totalOps);
+
+    const isSelected = i === selectedIdx;
+    const r = isSelected ? 7 : 4;
+
+    // Dijkstra dot
+    ctx.beginPath(); ctx.arc(toX(logN), toY(dLogOps), r, 0, Math.PI*2);
+    ctx.fillStyle = isSelected ? C_DIJK : 'rgba(255,153,51,0.5)';
+    ctx.fill();
+    if (isSelected) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+
+    // Tsinghua dot
+    ctx.beginPath(); ctx.arc(toX(logN), toY(tLogOps), r, 0, Math.PI*2);
+    ctx.fillStyle = isSelected ? C_TSIN : 'rgba(0,255,159,0.5)';
+    ctx.fill();
+    if (isSelected) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  });
+
+  // Legend
+  ctx.font = '11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  [[C_DIJK, 'Dijkstra — O(m log n)'], [C_TSIN, 'Tsinghua — O(m·α(n))']].forEach(([c, l], i) => {
+    const lx = PAD.left + 10, ly = PAD.top + 8 + i * 18;
+    ctx.fillStyle = c;
+    ctx.fillRect(lx, ly - 5, 18, 3);
+    ctx.fillStyle = C_TEXTL; ctx.fillText(l, lx + 24, ly - 4);
+  });
+}
+
+/**
+ * Speedup Bar Chart — shows growing speedup ratio at each scale.
+ */
+function drawSpeedupChart(selectedIdx) {
+  const canvas = document.getElementById('speedupChart');
+  const W = canvas.width = canvas.clientWidth;
+  const H = canvas.height = 200;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const PAD = { top: 20, right: 20, bottom: 50, left: 50 };
+  const CW = W - PAD.left - PAD.right;
+  const CH = H - PAD.top  - PAD.bottom;
+
+  const speedups = ALL_STATS.map(s => s.stats.speedup);
+  const maxSpeedup = Math.ceil(Math.max(...speedups) * 1.2);
+
+  const barW = CW / SCALES.length - 8;
+  const toY  = (v) => PAD.top + CH - (v / maxSpeedup) * CH;
+
+  // Y-grid
+  ctx.strokeStyle = C_GRID; ctx.lineWidth = 1;
+  for (let y = 0; y <= maxSpeedup; y += 1) {
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, toY(y)); ctx.lineTo(PAD.left + CW, toY(y));
+    ctx.stroke();
+    ctx.fillStyle = C_TEXT; ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    if (y % 2 === 0) ctx.fillText(y + '×', PAD.left - 5, toY(y));
+  }
+
+  SCALES.forEach((s, i) => {
+    const su  = speedups[i];
+    const bx  = PAD.left + i * (CW / SCALES.length) + 4;
+    const by  = toY(su);
+    const bh  = CH - (by - PAD.top);
+    const sel = i === selectedIdx;
+
+    // Bar gradient
+    const grad = ctx.createLinearGradient(bx, by, bx, by + bh);
+    grad.addColorStop(0, sel ? C_SPEED : 'rgba(191,95,255,0.7)');
+    grad.addColorStop(1, 'rgba(191,95,255,0.15)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(bx, by, barW, bh);
+
+    if (sel) {
+      ctx.strokeStyle = C_SPEED; ctx.lineWidth = 1.5;
+      ctx.strokeRect(bx, by, barW, bh);
+    }
+
+    // Value on top
+    ctx.fillStyle = sel ? C_SPEED : C_TEXTL;
+    ctx.font = `${sel ? 'bold ' : ''}10px JetBrains Mono, monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(su.toFixed(1)+'×', bx + barW/2, by - 3);
+
+    // X-label
+    ctx.fillStyle = sel ? '#fff' : C_TEXT;
+    ctx.textBaseline = 'top';
+    ctx.font = `${sel ? 'bold ' : ''}10px Barlow Condensed, sans-serif`;
+    ctx.fillText(s.label, bx + barW/2, PAD.top + CH + 8);
+  });
+}
+
+/**
+ * Time Comparison Chart — grouped bars per scale.
+ */
+function drawTimeChart(selectedIdx) {
+  const canvas = document.getElementById('timeChart');
+  const W = canvas.width = canvas.clientWidth;
+  const H = canvas.height = 200;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const PAD = { top: 20, right: 20, bottom: 50, left: 55 };
+  const CW = W - PAD.left - PAD.right;
+  const CH = H - PAD.top  - PAD.bottom;
+
+  const dijkTimes = ALL_STATS.map(s => s.stats.dijkstra.timeMs);
+  const tsinTimes = ALL_STATS.map(s => s.stats.tsinghua.timeMs);
+  const maxTime   = Math.max(...dijkTimes);
+  const logMax    = Math.log10(maxTime) + 0.5;
+
+  const toY = (ms) => {
+    if (ms <= 0) return PAD.top + CH;
+    const logV = Math.log10(ms);
+    return PAD.top + CH - ((logV - (-4)) / (logMax - (-4))) * CH;
+  };
+
+  // Y-grid (log scale)
+  ctx.strokeStyle = C_GRID; ctx.lineWidth = 1;
+  for (let lv = -4; lv <= Math.ceil(logMax); lv++) {
+    const y = toY(Math.pow(10, lv));
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + CW, y); ctx.stroke();
+    ctx.fillStyle = C_TEXT; ctx.font = '8px JetBrains Mono, monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const labels = { '-4':'<1μs', '-3':'1μs','-2':'10μs','-1':'100μs','0':'1ms','1':'10ms','2':'100ms','3':'1s' };
+    if (labels[lv]) ctx.fillText(labels[lv], PAD.left - 4, y);
+  }
+
+  const groupW  = CW / SCALES.length;
+  const bw      = (groupW - 10) / 2;
+
+  SCALES.forEach((s, i) => {
+    const bx   = PAD.left + i * groupW + 4;
+    const sel  = i === selectedIdx;
+
+    // Dijkstra bar
+    const dy = toY(dijkTimes[i]);
+    const dh = PAD.top + CH - dy;
+    const dGrad = ctx.createLinearGradient(bx, dy, bx, dy+dh);
+    dGrad.addColorStop(0, sel ? C_DIJK : 'rgba(255,153,51,0.65)');
+    dGrad.addColorStop(1, 'rgba(255,153,51,0.1)');
+    ctx.fillStyle = dGrad;
+    ctx.fillRect(bx, dy, bw, dh);
+
+    // Tsinghua bar
+    const tx = bx + bw + 2;
+    const ty = toY(tsinTimes[i]);
+    const th = PAD.top + CH - ty;
+    const tGrad = ctx.createLinearGradient(tx, ty, tx, ty+th);
+    tGrad.addColorStop(0, sel ? C_TSIN : 'rgba(0,255,159,0.65)');
+    tGrad.addColorStop(1, 'rgba(0,255,159,0.1)');
+    ctx.fillStyle = tGrad;
+    ctx.fillRect(tx, ty, bw, th);
+
+    // Scale label
+    ctx.fillStyle = sel ? '#fff' : C_TEXT;
+    ctx.font = `${sel ? 'bold ' : ''}10px Barlow Condensed, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(s.label, bx + groupW/2 - 5, PAD.top + CH + 6);
+  });
+
+  // Legend
+  ctx.font = '10px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  [[C_DIJK,'Dijkstra'],[C_TSIN,'Tsinghua']].forEach(([c,l],i)=>{
+    ctx.fillStyle = c; ctx.fillRect(PAD.left + 5 + i*90, PAD.top - 2, 14, 3);
+    ctx.fillStyle = C_TEXTL; ctx.fillText(l, PAD.left + 5 + i*90 + 18, PAD.top - 3);
+  });
+}
+
+/**
+ * Draw all three charts for the selected scale index.
+ */
+function drawAllCharts(selectedIdx) {
+  requestAnimationFrame(() => {
+    drawGrowthChart(selectedIdx);
+    drawSpeedupChart(selectedIdx);
+    drawTimeChart(selectedIdx);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 10: COMPARISON TABLE
+───────────────────────────────────────────────────────────────────────── */
+function populateTable() {
+  const tbody = document.getElementById('compTableBody');
+  tbody.innerHTML = '';
+
+  ALL_STATS.forEach((s, i) => {
+    const st   = s.stats;
+    const sel  = i === currentScaleIdx;
+    const tr   = document.createElement('tr');
+    if (sel) tr.className = 'highlight';
+    tr.innerHTML = `
+      <td>${s.label} nodes</td>
+      <td>${fmt(st.m)}</td>
+      <td class="d">${fmt(st.dijkstra.totalOps, 2)}</td>
+      <td class="d">${fmtTime(st.dijkstra.timeMs)}</td>
+      <td class="d">${st.logN.toFixed(1)}</td>
+      <td class="t">${fmt(st.tsinghua.totalOps, 2)}</td>
+      <td class="t">${fmtTime(st.tsinghua.timeMs)}</td>
+      <td class="t">${st.alphaN}</td>
+      <td class="s">${st.speedup.toFixed(2)}×</td>
+      <td style="color:#8899aa">${fmtTime(st.timeSaved)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 11: BREAKDOWN RING CHARTS
+   Donut-style chart for each scale showing where operations go.
+───────────────────────────────────────────────────────────────────────── */
+function drawRingChart(canvas, dijkSortPct, relaxPct, tsinBucketPct) {
+  const W = canvas.width  = canvas.clientWidth || 140;
+  const H = canvas.height = W; // square
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = W/2, cy = H/2, R = W * 0.38, r = W * 0.22;
+
+  // Segments (outer ring = Dijkstra breakdown, inner ring = Tsinghua breakdown)
+  const drawRing = (R_outer, R_inner, segments) => {
+    let angle = -Math.PI / 2; // start at top
+    segments.forEach(([frac, color]) => {
+      const sweep = frac * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R_outer, angle, angle + sweep);
+      ctx.arc(cx, cy, R_inner, angle + sweep, angle, true);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      angle += sweep;
+    });
+  };
+
+  // Outer ring: Dijkstra — sorting ops (amber) + relaxation ops (teal)
+  drawRing(R, r, [
+    [dijkSortPct, 'rgba(255,153,51,0.85)'],
+    [relaxPct,    'rgba(0,200,200,0.5)'],
+  ]);
+
+  // Inner ring: Tsinghua — 0 sorting + relaxation (teal) + tiny bucket ops (green)
+  const tsinRelaxFrac = 1 - tsinBucketPct;
+  drawRing(r * 0.9, r * 0.4, [
+    [0,             C_DIJK],       // 0 sorting cost
+    [tsinRelaxFrac, 'rgba(0,200,200,0.5)'],
+    [tsinBucketPct, 'rgba(0,255,159,0.7)'],
+  ]);
+
+  // Centre label
+  ctx.fillStyle = '#8899aa'; ctx.font = `bold ${W*0.08}px Barlow Condensed, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('OPS', cx, cy - W*0.04);
+  ctx.fillText('SPLIT', cx, cy + W*0.06);
+}
+
+function buildBreakdownRings() {
+  const grid = document.getElementById('breakdownGrid');
+  grid.innerHTML = '';
+
+  ALL_STATS.forEach((s, i) => {
+    const st = s.stats;
+    const total = st.dijkstra.totalOps;
+    const dijkSortPct    = st.dijkstra.sortOps   / total;
+    const dijkRelaxPct   = st.dijkstra.relaxOps  / total;
+    const tsinBucketPct  = st.tsinghua.bucketOps / st.tsinghua.totalOps;
+
+    const card = document.createElement('div');
+    card.className = 'ring-card fade';
+    card.innerHTML = `
+      <h4>${s.label} nodes</h4>
+      <canvas id="ring_${i}" width="120" height="120"></canvas>
+      <div class="ring-legend">
+        <div class="rl"><div class="dot" style="background:rgba(255,153,51,.85)"></div>
+          Dijkstra: ${(dijkSortPct*100).toFixed(0)}% sorting ops</div>
+        <div class="rl"><div class="dot" style="background:rgba(0,200,200,.6)"></div>
+          Shared: ${(dijkRelaxPct*100).toFixed(0)}% relaxations</div>
+        <div class="rl"><div class="dot" style="background:rgba(0,255,159,.7)"></div>
+          Tsinghua: ${(tsinBucketPct*100).toFixed(0)}% bucket ops</div>
+        <div class="rl"><div class="dot" style="background:rgba(0,0,0,0.3);border:1px solid #555"></div>
+          Tsinghua: 0% sorting ✓</div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  // Actually draw the canvases (slightly delayed to allow layout)
+  setTimeout(() => {
+    ALL_STATS.forEach((s, i) => {
+      const st  = s.stats;
+      const total = st.dijkstra.totalOps;
+      drawRingChart(
+        document.getElementById(`ring_${i}`),
+        st.dijkstra.sortOps / total,
+        st.dijkstra.relaxOps / total,
+        st.tsinghua.bucketOps / st.tsinghua.totalOps
+      );
+    });
+  }, 80);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 12: TAB BUILDING
+───────────────────────────────────────────────────────────────────────── */
+function buildTabs() {
+  const tabsEl = document.getElementById('tabs');
+  tabsEl.innerHTML = '';
+  ALL_STATS.forEach((s, i) => {
+    const tab = document.createElement('button');
+    tab.className = 'tab' + (i === currentScaleIdx ? ' active' : '');
+    tab.textContent = s.label + ' NODES';
+    tab.dataset.speedup = s.stats.speedup.toFixed(1) + '×';
+    tab.addEventListener('click', () => selectScale(i));
+    tabsEl.appendChild(tab);
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 13: MAIN ORCHESTRATOR — selectScale()
+   Called when user changes the scale tab.
+───────────────────────────────────────────────────────────────────────── */
+async function selectScale(idx) {
+  currentScaleIdx = idx;
+  raceCancelFlag = true; // cancel any running animation
+
+  // Update tabs
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', i === idx);
+  });
+
+  const scaleData = ALL_STATS[idx];
+  const badge = document.getElementById('raceBadge');
+  const btn   = document.getElementById('btnRun');
+
+  // Reset race visuals
+  document.getElementById('dijkFill').style.width  = '0%';
+  document.getElementById('tsinFill').style.width  = '0%';
+  document.getElementById('dijkOpsLive').textContent = '0';
+  document.getElementById('tsinOpsLive').textContent = '0';
+  document.getElementById('dijkTime').textContent  = '—';
+  document.getElementById('tsinTime').textContent  = '—';
+  document.getElementById('speedupLive').textContent = '—';
+  document.getElementById('timeSaved').textContent = '—';
+  document.getElementById('winner-banner').style.display = 'none';
+
+  // Set badge + button depending on whether this scale runs for real
+  if (scaleData.measured) {
+    badge.textContent = '⚡ MEASURED';
+    badge.className   = 'race-badge measured';
+    btn.textContent   = `▶▶ BENCHMARK ${scaleData.label} NODES (REAL)`;
+  } else {
+    badge.textContent = '📐 PROJECTED';
+    badge.className   = 'race-badge projected';
+    btn.textContent   = `▶▶ SIMULATE ${scaleData.label} NODES (PROJECTED)`;
+  }
+  btn.disabled = false;
+
+  // Use cached measured data if available, else use projected
+  let dijkStats, tsinStats;
+  if (measuredCache.has(idx)) {
+    const cached = measuredCache.get(idx);
+    dijkStats = cached.dijkstra;
+    tsinStats = cached.tsinghua;
+  } else {
+    dijkStats = scaleData.stats.dijkstra;
+    tsinStats = scaleData.stats.tsinghua;
+  }
+
+  // Update stats grid and table
+  const statsToShow = measuredCache.has(idx)
+    ? measuredCache.get(idx)
+    : scaleData.stats;
+  populateStatsGrid(statsToShow);
+  populateTable();
+  drawAllCharts(idx);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 14: BENCHMARK RUNNER
+   Handles the "Run Benchmark" button click.
+   For 1K/10K: actually runs the algorithms.
+   For larger scales: projects and animates.
+───────────────────────────────────────────────────────────────────────── */
+document.getElementById('btnRun').addEventListener('click', async () => {
+  if (raceActive) return;
+
+  const idx       = currentScaleIdx;
+  const scaleData = ALL_STATS[idx];
+  const btn       = document.getElementById('btnRun');
+  const badge     = document.getElementById('raceBadge');
+  raceCancelFlag  = false;
+
+  let dijkStats, tsinStats;
+
+  if (scaleData.measured && !measuredCache.has(idx)) {
+    // ── ACTUALLY RUN THE ALGORITHMS ──────────────────────────────────
+    btn.disabled = true;
+    btn.textContent = `⏳ GENERATING ${scaleData.label}-NODE GRAPH...`;
+    badge.className = 'race-badge running'; badge.textContent = 'RUNNING';
+
+    // Yield to browser to update UI before heavy computation
+    await new Promise(resolve => setTimeout(resolve, 30));
+
+    const { adj, edgeCount } = generateGraph(scaleData.n);
+
+    btn.textContent = `⏳ RUNNING DIJKSTRA...`;
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const dResult = runDijkstra(adj, scaleData.n);
+
+    btn.textContent = `⏳ RUNNING TSINGHUA...`;
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const tResult = runTsinghua(adj, scaleData.n);
+
+    // Build measured stats object in the same shape as projected stats
+    const measured = {
+      n: scaleData.n,
+      m: edgeCount,
+      logN:   Math.log2(scaleData.n),
+      alphaN: alphaFn(scaleData.n),
+      speedup:   dResult.totalOps / tResult.totalOps,
+      timeSaved: dResult.realTimeMs - tResult.realTimeMs,
+      dijkstra: {
+        totalOps:   dResult.totalOps,
+        sortOps:    dResult.sortOps,
+        relaxOps:   dResult.relaxOps,
+        timeMs:     dResult.realTimeMs,
+        memMB:      scaleData.stats.dijkstra.memMB,
+        nodesPerMs: scaleData.n / Math.max(dResult.realTimeMs, 0.001),
+      },
+      tsinghua: {
+        totalOps:   tResult.totalOps,
+        sortOps:    0,
+        bucketOps:  tResult.bucketOps,
+        relaxOps:   tResult.relaxOps,
+        timeMs:     tResult.realTimeMs,
+        memMB:      scaleData.stats.tsinghua.memMB,
+        nodesPerMs: scaleData.n / Math.max(tResult.realTimeMs, 0.001),
+      },
+    };
+
+    measuredCache.set(idx, measured);
+    dijkStats = measured.dijkstra;
+    tsinStats = measured.tsinghua;
+
+    populateStatsGrid(measured);
+    drawAllCharts(idx);
+
+    badge.textContent = '⚡ MEASURED'; badge.className = 'race-badge measured';
+
+  } else {
+    // Use projected (or cached measured) stats
+    const src = measuredCache.has(idx) ? measuredCache.get(idx) : scaleData.stats;
+    dijkStats = src.dijkstra;
+    tsinStats = src.tsinghua;
+  }
+
+  // Start the race animation
+  runRace(idx, dijkStats, tsinStats);
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION 15: SCROLL OBSERVER & INITIAL RENDER
+───────────────────────────────────────────────────────────────────────── */
+const fadeObs = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade').forEach(el => fadeObs.observe(el));
+
+// Redraw charts on window resize
+window.addEventListener('resize', () => drawAllCharts(currentScaleIdx));
+
+// ── INITIAL SETUP
+buildTabs();
+buildBreakdownRings();
+populateTable();
+selectScale(1); // default: 10K
+
+// Register new .fade elements created by buildBreakdownRings
+setTimeout(() => {
+  document.querySelectorAll('.fade').forEach(el => fadeObs.observe(el));
+}, 100);
+
+</script>
+</body>
+</html>

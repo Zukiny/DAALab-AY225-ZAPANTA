@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knight's Tour Solver & Final Square Analyzer</title>
+    <style>
+        :root { --dark: #2c3e50; --light: #ecf0f1; --accent: #27ae60; --reset: #e74c3c; --analysis: #3498db; --final-square: #e74c3c; }
+        body { font-family: system-ui, sans-serif; background: #121212; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .controls { background: #222; padding: 20px; border-radius: 10px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.5); flex-wrap: wrap; }
+        .board-layout { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+        
+        /* Board Wrapper for Labels */
+        .board-wrapper { display: grid; grid-template-columns: 30px 400px; grid-template-rows: 400px 30px; }
+        .rank-labels { display: flex; flex-direction: column; justify-content: space-around; align-items: center; font-weight: bold; color: #999; }
+        .file-labels { grid-column: 2; display: flex; justify-content: space-around; align-items: center; font-weight: bold; color: #999; height: 30px; }
+        
+        .grid { display: grid; grid-template-columns: repeat(8, 50px); grid-template-rows: repeat(8, 50px); border: 2px solid #555; }
+        .cell { width: 50px; height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; color: #222; position: relative; }
+        .white { background: #dee3e6; }
+        .black { background: #8ca2ad; }
+        
+        .knight-icon { font-size: 1.2rem; line-height: 1; }
+        .step-number { font-size: 0.8rem; }
+        .start-square { background: #f39c12 !important; color: white; }
+        .final-square { background: var(--final-square) !important; color: white; font-weight: bold; }
+        .final-count { font-size: 0.7rem; color: white; }
+        .analysis-info { font-size: 0.8rem; color: #bdc3c7; margin-top: 5px; }
+
+        .info-panel { background: #222; padding: 15px; border-radius: 10px; width: 200px; height: 400px; display: flex; flex-direction: column; }
+        #moveList { flex-grow: 1; overflow-y: auto; padding-left: 25px; font-family: monospace; color: #2ecc71; margin: 10px 0; }
+        #analysisResults { flex-grow: 1; overflow-y: auto; font-family: monospace; color: #3498db; margin: 10px 0; font-size: 0.85rem; }
+        
+        input { width: 45px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #000; color: white; text-align: center; }
+        button { padding: 8px 15px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; }
+        .btn-solve { background: var(--accent); color: white; }
+        .btn-reset { background: var(--reset); color: white; }
+    </style>
+</head>
+<body>
+
+    <h2>Knight's Tour Solver & Final Square Analyzer</h2>
+
+    <div class="controls">
+        <div>
+            Mode: 
+            <input type="radio" id="solveMode" name="mode" value="solve" checked>
+            <label for="solveMode">Single Tour</label>
+            <input type="radio" id="analyzeMode" name="mode" value="analyze">
+            <label for="analyzeMode">Analyze Final Squares</label>
+        </div>
+        <div>
+            File (A-H): <input type="text" id="fileIn" value="A" maxlength="1" style="text-transform:uppercase">
+            Rank (1-8): <input type="number" id="rankIn" value="1" min="1" max="8">
+        </div>
+        <div id="analysisControls" style="display:none;">
+            Attempts: <input type="number" id="attempts" value="1000" min="100" max="5000" step="100">
+        </div>
+        <div>
+            <button id="actionBtn" class="btn-solve" onclick="handleAction()">Solve</button>
+            <button class="btn-reset" onclick="resetBoard()">Reset</button>
+        </div>
+    </div>
+
+    <div class="board-layout">
+        <div class="board-wrapper">
+            <div class="rank-labels">
+                <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+            </div>
+            
+            <div id="board" class="grid"></div>
+            
+            <div class="file-labels">
+                <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h4 style="margin:0" id="panelTitle">Move Order</h4>
+            <ol id="moveList"></ol>
+            <div id="analysisResults" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const N = 8;
+        const dr = [-2, -1, 1, 2, 2, 1, -1, -2];
+        const dc = [1, 2, 2, 1, -1, -2, -2, -1];
+        const files = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        let currentMode = 'solve';
+        let isRunning = false;
+
+        // Mode handling
+        function updateMode() {
+            const isSolveMode = document.getElementById('solveMode').checked;
+            currentMode = isSolveMode ? 'solve' : 'analyze';
+            
+            const actionBtn = document.getElementById('actionBtn');
+            const analysisControls = document.getElementById('analysisControls');
+            const panelTitle = document.getElementById('panelTitle');
+            const moveList = document.getElementById('moveList');
+            const analysisResults = document.getElementById('analysisResults');
+            
+            if (isSolveMode) {
+                actionBtn.textContent = 'Solve';
+                actionBtn.className = 'btn-solve';
+                analysisControls.style.display = 'none';
+                panelTitle.textContent = 'Move Order';
+                moveList.style.display = 'block';
+                analysisResults.style.display = 'none';
+            } else {
+                actionBtn.textContent = 'Analyze Final Squares';
+                actionBtn.className = 'btn-solve';
+                analysisControls.style.display = 'block';
+                panelTitle.textContent = 'Analysis Results';
+                moveList.style.display = 'none';
+                analysisResults.style.display = 'block';
+            }
+            resetBoard();
+        }
+
+        function handleAction() {
+            if (isRunning) return;
+            if (currentMode === 'solve') {
+                solve();
+            } else {
+                analyzeFinalSquares();
+            }
+        }
+
+        function initGrid() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${(r + c) % 2 === 0 ? 'white' : 'black'}`;
+                    cell.id = `c-${r}-${c}`;
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        function solve() {
+            resetBoard();
+            let grid = Array.from({ length: N }, () => Array(N).fill(-1));
+            
+            const startF = document.getElementById('fileIn').value.toUpperCase();
+            const startR = parseInt(document.getElementById('rankIn').value);
+            
+            let c = files.indexOf(startF);
+            let r = 8 - startR;
+
+            if (c === -1 || r < 0 || r > 7) {
+                alert("Please enter a valid square (A-H, 1-8).");
+                return;
+            }
+
+            // Start Tour
+            grid[r][c] = 1;
+            updateUI(r, c, 1, true);
+
+            let currR = r;
+            let currC = c;
+
+            for (let i = 2; i <= 64; i++) {
+                let nextMove = getBestNextMove(currR, currC, grid);
+                if (!nextMove) break;
+                currR = nextMove.r;
+                currC = nextMove.c;
+                grid[currR][currC] = i;
+                updateUI(currR, currC, i, false);
+            }
+        }
+
+        function getBestNextMove(r, c, grid) {
+            let bestR = -1, bestC = -1, minDegree = 9;
+            // Warnsdorff's heuristic
+            let moves = [0,1,2,3,4,5,6,7].sort(() => Math.random() - 0.5);
+
+            for (let i of moves) {
+                let nr = r + dr[i];
+                let nc = c + dc[i];
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && grid[nr][nc] === -1) {
+                    let degree = countOptions(nr, nc, grid);
+                    if (degree < minDegree) {
+                        minDegree = degree;
+                        bestR = nr;
+                        bestC = nc;
+                    }
+                }
+            }
+            return bestR === -1 ? null : { r: bestR, c: bestC };
+        }
+
+        function countOptions(r, c, grid) {
+            let count = 0;
+            for (let i = 0; i < 8; i++) {
+                let nr = r + dr[i], nc = c + dc[i];
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && grid[nr][nc] === -1) count++;
+            }
+            return count;
+        }
+
+        function updateUI(r, c, val, isInitial) {
+            const cell = document.getElementById(`c-${r}-${c}`);
+            
+            if (isInitial) {
+                cell.innerHTML = `<span class="knight-icon">♞</span><span class="step-number">${val}</span>`;
+                cell.style.color = "#d35400"; // Unique color for start
+            } else {
+                cell.innerText = val;
+            }
+            
+            const li = document.createElement('li');
+            li.innerText = `${files[c]}${8 - r}`;
+            document.getElementById('moveList').appendChild(li);
+        }
+
+        function resetBoard() {
+            initGrid();
+            document.getElementById('moveList').innerHTML = '';
+        }
+
+        initGrid();
+    </script>
+</body>
+</html>

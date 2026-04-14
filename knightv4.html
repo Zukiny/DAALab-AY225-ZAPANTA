@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knight's Tour: Targeted Path</title>
+    <style>
+        :root { --bg: #121212; --panel: #222; --accent: #3498db; --start: #e67e22; --end: #27ae60; --text: #eee; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        
+        .controls { background: var(--panel); padding: 20px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        
+        .board-wrapper { display: grid; grid-template-columns: 30px 400px; grid-template-rows: 400px 30px; }
+        .grid { display: grid; grid-template-columns: repeat(8, 50px); grid-template-rows: repeat(8, 50px); border: 2px solid #555; }
+        .cell { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; color: #222; position: relative; }
+        .white { background: #dee3e6; }
+        .black { background: #8ca2ad; }
+        
+        /* Labels */
+        .rank-labels, .file-labels { display: flex; font-weight: bold; color: #888; justify-content: space-around; }
+        .rank-labels { flex-direction: column; align-items: center; }
+        .file-labels { grid-column: 2; height: 30px; align-items: center; }
+
+        /* Highlights */
+        .start-sq { background: var(--start) !important; color: white !important; }
+        .end-sq { background: var(--end) !important; color: white !important; }
+        .path-sq { background: #f1c40f !important; border: 1px solid #d4ac0d; }
+
+        .sidebar { width: 220px; background: var(--panel); padding: 15px; border-radius: 10px; height: 400px; display: flex; flex-direction: column; }
+        #moveList { flex-grow: 1; overflow-y: auto; padding-left: 20px; font-family: monospace; color: #2ecc71; margin: 10px 0; }
+        
+        input { width: 40px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #000; color: white; text-align: center; }
+        button { padding: 10px 20px; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; transition: 0.2s; }
+        .btn-solve { background: var(--accent); color: white; }
+        .btn-solve:disabled { background: #555; }
+    </style>
+</head>
+<body>
+
+    <h2>Knight's Tour: Point A to Point B</h2>
+    <p style="color: #aaa; margin-bottom: 20px;">Input start and end squares. Algorithm will attempt to find a valid 64-move sequence.</p>
+
+    <div class="controls">
+        Start: <input type="text" id="startFile" value="A" maxlength="1"> <input type="number" id="startRank" value="1" min="1" max="8">
+        End: <input type="text" id="endFile" value="H" maxlength="1"> <input type="number" id="endRank" value="8" min="1" max="8">
+        <button id="solveBtn" class="btn-solve" onclick="runSolver()">Find Path</button>
+        <button onclick="resetUI()" style="background:#666; color:white;">Reset</button>
+    </div>
+
+    <div style="display: flex; gap: 30px; align-items: flex-start;">
+        <div class="board-wrapper">
+            <div class="rank-labels"><span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span></div>
+            <div id="board" class="grid"></div>
+            <div class="file-labels"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span></div>
+        </div>
+
+        <div class="sidebar">
+            <h4 id="statusTitle" style="margin:0">Status: Ready</h4>
+            <ol id="moveList"></ol>
+        </div>
+    </div>
+
+    <script>
+        const N = 8;
+        const dr = [-2, -1, 1, 2, 2, 1, -1, -2];
+        const dc = [1, 2, 2, 1, -1, -2, -2, -1];
+        const files = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        let finalPath = [];
+
+        function initGrid() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${(r + c) % 2 === 0 ? 'white' : 'black'}`;
+                    cell.id = `c-${r}-${c}`;
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        async function runSolver() {
+            resetUI();
+            const startPos = getIndices('startFile', 'startRank');
+            const endPos = getIndices('endFile', 'endRank');
+            
+            if (!startPos || !endPos) return;
+            if (startPos.r === endPos.r && startPos.c === endPos.c) {
+                alert("Start and End must be different!");
+                return;
+            }
+
+            document.getElementById('statusTitle').innerText = "Status: Calculating...";
+            document.getElementById('solveBtn').disabled = true;
+
+            // Initialize board array
+            let grid = Array.from({ length: N }, () => Array(N).fill(-1));
+            grid[startPos.r][startPos.c] = 1;
+            finalPath = [{ r: startPos.r, c: startPos.c }];
+
+            // Start Backtracking with Warnsdorff Heuristic
+            const success = solveBacktrack(startPos.r, startPos.c, 2, endPos, grid);
+
+            if (success) {
+                document.getElementById('statusTitle').innerText = "Status: PALDO!";
+                animatePath();
+            } else {
+                document.getElementById('statusTitle').innerText = "Status: No Path Found";
+                alert("Could not find a 64-move tour ending on that specific square.");
+                document.getElementById('solveBtn').disabled = false;
+            }
+        }
+
+        // Recursive Backtracking function
+        function solveBacktrack(r, c, moveCount, target, grid) {
+            if (moveCount === 65) {
+                // Check if last move matches target
+                return (r === target.r && c === target.c);
+            }
+
+            // Get valid moves and sort by Warnsdorff Degree
+            let candidates = [];
+            for (let i = 0; i < 8; i++) {
+                let nr = r + dr[i], nc = c + dc[i];
+                if (isValid(nr, nc, grid)) {
+                    candidates.push({ r: nr, c: nc, deg: getDegree(nr, nc, grid) });
+                }
+            }
+
+            // Optimization: If we haven't reached move 64, don't allow target square prematurely
+            if (moveCount < 64) {
+                candidates = candidates.filter(m => !(m.r === target.r && m.c === target.c));
+            }
+
+            // Sort by lowest degree (Warnsdorff's Rule)
+            candidates.sort((a, b) => a.deg - b.deg);
+
+            for (let move of candidates) {
+                grid[move.r][move.c] = moveCount;
+                finalPath.push({ r: move.r, c: move.c });
+
+                if (solveBacktrack(move.r, move.c, moveCount + 1, target, grid)) return true;
+
+                // Backtrack
+                grid[move.r][move.c] = -1;
+                finalPath.pop();
+            }
+
+            return false;
+        }
+
+        function getDegree(r, c, grid) {
+            let count = 0;
+            for (let i = 0; i < 8; i++) {
+                if (isValid(r + dr[i], c + dc[i], grid)) count++;
+            }
+            return count;
+        }
+
+        function isValid(r, c, grid) {
+            return r >= 0 && r < 8 && c >= 0 && c < 8 && grid[r][c] === -1;
+        }
+
+        async function animatePath() {
+            const list = document.getElementById('moveList');
+            for (let i = 0; i < finalPath.length; i++) {
+                const { r, c } = finalPath[i];
+                const cell = document.getElementById(`c-${r}-${c}`);
+                cell.innerText = i + 1;
+                
+                if (i === 0) cell.classList.add('start-sq');
+                else if (i === 63) cell.classList.add('end-sq');
+                else cell.classList.add('path-sq');
+
+                const li = document.createElement('li');
+                li.innerText = `${files[c]}${8 - r}`;
+                list.appendChild(li);
+                list.scrollTop = list.scrollHeight;
+
+                await new Promise(res => setTimeout(res, 50));
+            }
+        }
+
+        function getIndices(fId, rId) {
+            const f = document.getElementById(fId).value.toUpperCase();
+            const r = parseInt(document.getElementById(rId).value);
+            const cIdx = files.indexOf(f);
+            const rIdx = 8 - r;
+            if (cIdx === -1 || rIdx < 0 || rIdx > 7) {
+                alert("Invalid coordinates");
+                return null;
+            }
+            return { r: rIdx, c: cIdx };
+        }
+
+        function resetUI() {
+            initGrid();
+            document.getElementById('moveList').innerHTML = '';
+            document.getElementById('solveBtn').disabled = false;
+            document.getElementById('statusTitle').innerText = "Status: Ready";
+        }
+
+        initGrid();
+    </script>
+</body>
+</html>

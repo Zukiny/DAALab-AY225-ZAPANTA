@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knight's Tour & Possible Moves Analyzer</title>
+    <style>
+        :root { --dark: #2c3e50; --light: #ecf0f1; --accent: #27ae60; --reset: #e74c3c; --knight-color: #d35400; --possible-move: #3498db; }
+        body { font-family: system-ui, sans-serif; background: #121212; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .controls { background: #222; padding: 20px; border-radius: 10px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; justify-content: center; }
+        .board-layout { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+        
+        /* Board UI Structure */
+        .board-wrapper { display: grid; grid-template-columns: 30px 400px; grid-template-rows: 400px 30px; }
+        .rank-labels { display: flex; flex-direction: column; justify-content: space-around; align-items: center; font-weight: bold; color: #999; }
+        .file-labels { grid-column: 2; display: flex; justify-content: space-around; align-items: center; font-weight: bold; color: #999; height: 30px; }
+        
+        .grid { display: grid; grid-template-columns: repeat(8, 50px); grid-template-rows: repeat(8, 50px); border: 2px solid #555; position: relative; }
+        .cell { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; color: #222; transition: background 0.3s; }
+        .white { background: #dee3e6; }
+        .black { background: #8ca2ad; }
+        
+        /* Visual cues for the animation and possible moves */
+        .active-knight { background: #f1c40f !important; transform: scale(1.05); z-index: 10; box-shadow: 0 0 15px #f1c40f; }
+        .possible-move { background: var(--possible-move) !important; color: white; }
+        .starting-position { background: #e74c3c !important; color: white; }
+        .visited-text { color: rgba(0,0,0,0.5); font-size: 0.8rem; }
+        .knight-head { font-size: 1.4rem; color: var(--knight-color); margin-right: 4px; }
+        .move-number { font-size: 0.8rem; color: white; font-weight: bold; }
+
+        .info-panel { background: #222; padding: 15px; border-radius: 10px; width: 180px; height: 400px; display: flex; flex-direction: column; }
+        #moveList { flex-grow: 1; overflow-y: auto; padding-left: 25px; font-family: monospace; color: #2ecc71; margin: 10px 0; scroll-behavior: smooth; }
+        #possibleMovesList { flex-grow: 1; overflow-y: auto; font-family: monospace; color: #3498db; margin: 10px 0; }
+        .mode-selector { margin-bottom: 10px; }
+        
+        input { width: 45px; padding: 5px; border-radius: 4px; border: 1px solid #555; background: #000; color: white; text-align: center; }
+        button { padding: 8px 15px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold; }
+        .btn-solve { background: var(--accent); color: white; }
+        .btn-reset { background: var(--reset); color: white; }
+        button:disabled { background: #555; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <h2>Knight's Tour Solver & Move Analyzer</h2>
+
+    <div class="controls">
+        <div class="mode-selector">
+            Mode: 
+            <input type="radio" id="tourMode" name="mode" value="tour" checked>
+            <label for="tourMode">Knight's Tour</label>
+            <input type="radio" id="movesMode" name="mode" value="moves">
+            <label for="movesMode">Show Possible Moves</label>
+        </div>
+        <br>
+        File (A-H): <input type="text" id="fileIn" value="A" maxlength="1" style="text-transform:uppercase">
+        Rank (1-8): <input type="number" id="rankIn" value="1" min="1" max="8">
+        <div id="tourControls">
+            Delay (ms): <input type="number" id="speed" value="100" min="10" max="1000">
+        </div>
+        <button id="actionBtn" class="btn-solve" onclick="handleAction()">Start Tour</button>
+        <button class="btn-reset" onclick="resetBoard()">Reset</button>
+    </div>
+
+    <div class="board-layout">
+        <div class="board-wrapper">
+            <div class="rank-labels">
+                <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+            </div>
+            <div id="board" class="grid"></div>
+            <div class="file-labels">
+                <span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h4 style="margin:0" id="panelTitle">Move Log</h4>
+            <ol id="moveList" style="display: block;"></ol>
+            <div id="possibleMovesList" style="display: none;">
+                <div id="moveCount" style="color: #f39c12; font-weight: bold; margin-bottom: 10px;"></div>
+                <div id="moveDetails"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * GLOBAL CONSTANTS & STATE
+         */
+        const N = 8;
+        // Possible X and Y offsets for a Knight's 'L' jump
+        const dr = [-2, -1, 1, 2, 2, 1, -1, -2]; 
+        const dc = [1, 2, 2, 1, -1, -2, -2, -1]; 
+        const files = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        let isAnimating = false;
+        let currentMode = 'tour';
+
+        /**
+         * MODE HANDLING
+         * Updates UI based on selected mode
+         */
+        function updateMode() {
+            const tourMode = document.getElementById('tourMode').checked;
+            const actionBtn = document.getElementById('actionBtn');
+            const tourControls = document.getElementById('tourControls');
+            const panelTitle = document.getElementById('panelTitle');
+            const moveList = document.getElementById('moveList');
+            const possibleMovesList = document.getElementById('possibleMovesList');
+            
+            currentMode = tourMode ? 'tour' : 'moves';
+            
+            if (tourMode) {
+                actionBtn.textContent = 'Start Tour';
+                actionBtn.className = 'btn-solve';
+                tourControls.style.display = 'block';
+                panelTitle.textContent = 'Move Log';
+                moveList.style.display = 'block';
+                possibleMovesList.style.display = 'none';
+            } else {
+                actionBtn.textContent = 'Show Possible Moves';
+                actionBtn.className = 'btn-solve';
+                tourControls.style.display = 'none';
+                panelTitle.textContent = 'Possible Moves';
+                moveList.style.display = 'none';
+                possibleMovesList.style.display = 'block';
+            }
+            resetBoard();
+        }
+
+        /**
+         * MAIN ACTION HANDLER
+         * Routes to appropriate function based on current mode
+         */
+        function handleAction() {
+            if (currentMode === 'tour') {
+                startTour();
+            } else {
+                showPossibleMoves();
+            }
+        }
+
+        /**
+         * UI INITIALIZATION
+         * Generates the 64-cell grid with alternating colors
+         */
+        function initGrid() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${(r + c) % 2 === 0 ? 'white' : 'black'}`;
+                    cell.id = `c-${r}-${c}`;
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        /**
+         * MAIN CONTROLLER
+         * Triggers the mathematical solver then passes the result to the animator
+         */
+        async function startTour() {
+            if (isAnimating) return; // Prevent overlapping runs
+            resetBoard();
+            
+            // 1. Get user inputs
+            const startF = document.getElementById('fileIn').value.toUpperCase();
+            const startR = parseInt(document.getElementById('rankIn').value);
+            const delay = parseInt(document.getElementById('speed').value);
+            
+            // 2. Map Algebraic notation to Array indices (e.g., A1 -> Row 7, Col 0)
+            let startCol = files.indexOf(startF);
+            let startRow = 8 - startR;
+
+            if (startCol === -1 || startRow < 0 || startRow > 7) {
+                alert("Please select a square between A1 and H8.");
+                return;
+            }
+
+            isAnimating = true;
+            document.getElementById('actionBtn').disabled = true;
+
+            // 3. Solve the board using Warnsdorff's Rule (Heuristic search)
+            let grid = Array.from({ length: N }, () => Array(N).fill(-1));
+            let moveSequence = [];
+            
+            let currR = startRow, currC = startCol;
+            grid[currR][currC] = 1;
+            moveSequence.push({r: currR, c: currC, val: 1});
+
+            for (let i = 2; i <= 64; i++) {
+                let next = getBestNextMove(currR, currC, grid);
+                if (!next) break; // Failure to find a path (should not happen on 8x8 with this rule)
+                currR = next.r;
+                currC = next.c;
+                grid[currR][currC] = i;
+                moveSequence.push({r: currR, c: currC, val: i});
+            }
+
+            // 4. Run the visual animation based on the solved sequence
+            for (let move of moveSequence) {
+                if (!isAnimating) break; // Handle manual reset during animation
+                await performStep(move.r, move.c, move.val, delay);
+            }
+
+            isAnimating = false;
+            document.getElementById('actionBtn').disabled = false;
+        }
+
+        /**
+         * POSSIBLE MOVES ANALYZER
+         * Shows all valid moves from a given starting position
+         */
+        function showPossibleMoves() {
+            resetBoard();
+            
+            // Get user inputs
+            const startF = document.getElementById('fileIn').value.toUpperCase();
+            const startR = parseInt(document.getElementById('rankIn').value);
+            
+            // Map Algebraic notation to Array indices
+            let startCol = files.indexOf(startF);
+            let startRow = 8 - startR;
+
+            if (startCol === -1 || startRow < 0 || startRow > 7) {
+                alert("Please select a square between A1 and H8.");
+                return;
+            }
+
+            // Highlight starting position
+            const startCell = document.getElementById(`c-${startRow}-${startCol}`);
+            startCell.innerHTML = `<span class="knight-head">♞</span>`;
+            startCell.classList.add('starting-position');
+
+            // Calculate all possible moves
+            let possibleMoves = [];
+            let moveDetails = [];
+            
+            for (let i = 0; i < 8; i++) {
+                let newR = startRow + dr[i];
+                let newC = startCol + dc[i];
+                
+                // Check if move is within bounds
+                if (newR >= 0 && newR < 8 && newC >= 0 && newC < 8) {
+                    possibleMoves.push({r: newR, c: newC});
+                    
+                    // Highlight the possible move square
+                    const cell = document.getElementById(`c-${newR}-${newC}`);
+                    cell.classList.add('possible-move');
+                    cell.innerHTML = `<span class="move-number">${possibleMoves.length}</span>`;
+                    
+                    // Add to details
+                    moveDetails.push(`${possibleMoves.length}. ${files[newC]}${8 - newR}`);
+                }
+            }
+
+            // Update the info panel
+            const moveCount = document.getElementById('moveCount');
+            const moveDetailsDiv = document.getElementById('moveDetails');
+            
+            moveCount.textContent = `Total possible moves: ${possibleMoves.length}`;
+            moveDetailsDiv.innerHTML = moveDetails.map(move => `<div style="margin-bottom: 5px;">${move}</div>`).join('');
+        }
+
+        /**
+         * WARNSDORFF'S RULE ENGINE
+         * Picks the move that has the FEWEST onwards moves.
+         * This prevents the knight from entering "dead ends" early.
+         */
+        function getBestNextMove(r, c, grid) {
+            let bestR = -1, bestC = -1, minDegree = 9;
+            
+            // Shuffle moves to ensure the path isn't identical every time for the same square
+            let moveIndices = [0,1,2,3,4,5,6,7].sort(() => Math.random() - 0.5);
+
+            for (let i of moveIndices) {
+                let nr = r + dr[i], nc = c + dc[i];
+                
+                // Check if move is within bounds and the square is unvisited
+                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && grid[nr][nc] === -1) {
+                    // Look one step further: how many exits does THIS square have?
+                    let degree = 0;
+                    for (let j = 0; j < 8; j++) {
+                        let nnr = nr + dr[j], nnc = nc + dc[j];
+                        if (nnr >= 0 && nnr < 8 && nnc >= 0 && nnc < 8 && grid[nnr][nnc] === -1) degree++;
+                    }
+                    
+                    // Prioritize the square with the lowest degree
+                    if (degree < minDegree) {
+                        minDegree = degree;
+                        bestR = nr;
+                        bestC = nc;
+                    }
+                }
+            }
+            return bestR === -1 ? null : { r: bestR, c: bestC };
+        }
+
+        /**
+         * ANIMATION ENGINE
+         * Updates the DOM one square at a time using async/await
+         */
+        function performStep(r, c, val, delay) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    // Remove current knight icon from previous square
+                    const oldKnight = document.querySelector('.knight-head');
+                    if (oldKnight) oldKnight.remove();
+                    
+                    // Un-highlight the previous active square
+                    const oldActive = document.querySelector('.active-knight');
+                    if (oldActive) oldActive.classList.remove('active-knight');
+
+                    // Update the new square
+                    const cell = document.getElementById(`c-${r}-${c}`);
+                    cell.innerHTML = `<span class="knight-head">♞</span> <span class="visited-text">${val}</span>`;
+                    cell.classList.add('active-knight');
+
+                    // Update the side-log
+                    const li = document.createElement('li');
+                    li.innerText = `${files[c]}${8 - r}`;
+                    const list = document.getElementById('moveList');
+                    list.appendChild(li);
+                    list.scrollTop = list.scrollHeight; // Auto-scroll to latest move
+
+                    resolve();
+                }, delay);
+            });
+        }
+
+        /**
+         * RESET FUNCTION
+         * Stops animation and wipes board/logs
+         */
+        function resetBoard() {
+            isAnimating = false;
+            document.getElementById('actionBtn').disabled = false;
+            initGrid();
+            document.getElementById('moveList').innerHTML = '';
+            document.getElementById('moveCount').textContent = '';
+            document.getElementById('moveDetails').innerHTML = '';
+        }
+
+        // Run initial board generation and setup event listeners on load
+        window.addEventListener('load', () => {
+            initGrid();
+            
+            // Add event listeners for mode changes
+            document.getElementById('tourMode').addEventListener('change', updateMode);
+            document.getElementById('movesMode').addEventListener('change', updateMode);
+            
+            // Initialize with tour mode
+            updateMode();
+        });
+    </script>
+</body>
+</html>

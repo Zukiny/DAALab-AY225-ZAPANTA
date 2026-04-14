@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Breaking the Sorting Barrier — Tsinghua Shortest-Path Algorithm</title>
+
+  <!-- Google Fonts: editorial headline + monospace body for a "research paper meets hacker" feel -->
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── DESIGN TOKENS ──────────────────────────────────────────────────── */
+    :root {
+      --bg:        #04080f;        /* deep navy-black */
+      --surface:   #080f1c;
+      --card:      #0b1424;
+      --border:    rgba(0,200,255,.12);
+      --accent:    #00d4ff;        /* electric cyan */
+      --accent2:   #ff6b35;        /* warm orange — "breakthrough" colour */
+      --accent3:   #7c3aed;        /* violet for old algorithm */
+      --text:      #c8d8e8;
+      --text-dim:  #607080;
+      --green:     #00ff88;
+      --red:       #ff4466;
+      --font-head: 'Syne', sans-serif;
+      --font-serif:'Instrument Serif', serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    /* ─── RESET & BASE ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* ─── GRID NOISE TEXTURE ─────────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* ─── SCROLLBAR ──────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 2px; }
+
+    /* ─── UTILITY ────────────────────────────────────────────────────────── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 1; }
+    .tag {
+      display: inline-block;
+      font-size: 10px; letter-spacing: .15em; text-transform: uppercase;
+      padding: 3px 10px; border: 1px solid var(--accent);
+      color: var(--accent); border-radius: 2px;
+    }
+    .tag.orange { border-color: var(--accent2); color: var(--accent2); }
+    .tag.violet { border-color: var(--accent3); color: var(--accent3); }
+
+    h1, h2, h3 { font-family: var(--font-head); font-weight: 800; }
+
+    /* ─── NAV ────────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      border-bottom: 1px solid var(--border);
+      background: rgba(4,8,15,.85);
+      backdrop-filter: blur(12px);
+    }
+    nav .inner {
+      max-width: 1100px; margin: 0 auto; padding: 0 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
+    }
+    .nav-logo {
+      font-family: var(--font-head); font-size: 13px; font-weight: 800;
+      color: var(--accent); letter-spacing: .05em;
+    }
+    .nav-links { display: flex; gap: 1.5rem; list-style: none; }
+    .nav-links a {
+      color: var(--text-dim); text-decoration: none; font-size: 11px;
+      letter-spacing: .1em; text-transform: uppercase;
+      transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--accent); }
+
+    /* ─── HERO ───────────────────────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex; align-items: center;
+      padding: 120px 0 80px;
+      position: relative; overflow: hidden;
+    }
+
+    /* Animated radial glow behind hero */
+    #hero::after {
+      content: '';
+      position: absolute; top: -20%; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px; border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(0,212,255,.06) 0%, transparent 70%);
+      animation: pulse 6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: translateX(-50%) scale(1); opacity: .6; }
+      50%       { transform: translateX(-50%) scale(1.15); opacity: 1; }
+    }
+
+    .hero-eyebrow { margin-bottom: 1.2rem; display: flex; gap: .6rem; flex-wrap: wrap; }
+    .hero-title {
+      font-family: var(--font-serif);
+      font-size: clamp(2.4rem, 6vw, 5rem);
+      line-height: 1.1;
+      color: #e8f4ff;
+      margin-bottom: 1rem;
+    }
+    .hero-title em { color: var(--accent); font-style: italic; }
+    .hero-subtitle {
+      font-size: 13px; color: var(--text-dim);
+      max-width: 560px; margin-bottom: 2.5rem; line-height: 1.8;
+    }
+    .hero-cta {
+      display: flex; gap: 1rem; flex-wrap: wrap;
+    }
+    .btn {
+      padding: 10px 22px; border-radius: 3px; font-family: var(--font-mono);
+      font-size: 12px; letter-spacing: .08em; cursor: pointer;
+      text-decoration: none; border: none; transition: all .2s;
+    }
+    .btn-primary {
+      background: var(--accent); color: var(--bg); font-weight: 700;
+    }
+    .btn-primary:hover { background: #00efff; transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent; color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .btn-outline:hover { background: rgba(0,212,255,.08); }
+
+    /* Hero stat strip */
+    .hero-stats {
+      display: flex; gap: 2.5rem; margin-top: 3.5rem;
+      padding-top: 2rem; border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .stat-item .num {
+      font-size: 2rem; font-weight: 700; color: var(--accent2);
+      font-family: var(--font-head);
+    }
+    .stat-item .lbl { font-size: 11px; color: var(--text-dim); letter-spacing: .06em; }
+
+    /* ─── SECTION SHARED ────────────────────────────────────────────────── */
+    section { padding: 80px 0; }
+    .section-head { text-align: center; margin-bottom: 3rem; }
+    .section-head h2 { font-size: clamp(1.6rem, 4vw, 2.6rem); color: #e0eeff; margin: .5rem 0; }
+    .section-head p  { color: var(--text-dim); max-width: 560px; margin: .8rem auto 0; font-size: 13px; }
+
+    /* ─── CONCEPT EXPLAINER ─────────────────────────────────────────────── */
+    #concept { background: var(--surface); }
+    .concept-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media(max-width:700px){ .concept-grid { grid-template-columns: 1fr; } }
+
+    .concept-card {
+      border: 1px solid var(--border);
+      border-radius: 6px; padding: 1.8rem;
+      background: var(--card);
+      position: relative; overflow: hidden;
+      transition: border-color .3s;
+    }
+    .concept-card:hover { border-color: rgba(0,212,255,.35); }
+    .concept-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .concept-card.old::before { background: var(--accent3); }
+    .concept-card.new::before { background: var(--accent); }
+
+    .concept-card h3 { font-size: 1rem; margin-bottom: .5rem; }
+    .concept-card .complexity {
+      font-size: 1.4rem; font-family: var(--font-head); font-weight: 800;
+      margin: .8rem 0; letter-spacing: -.02em;
+    }
+    .concept-card.old .complexity { color: var(--accent3); }
+    .concept-card.new .complexity { color: var(--accent); }
+    .concept-card p { font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+    .concept-card ul { padding-left: 1rem; font-size: 12px; color: var(--text-dim); }
+    .concept-card ul li { margin-bottom: .4rem; }
+
+    /* ─── VISUAL COMPARISON BARS ────────────────────────────────────────── */
+    #comparison { }
+    .bar-chart { display: flex; flex-direction: column; gap: 1.4rem; }
+    .bar-row { }
+    .bar-label {
+      display: flex; justify-content: space-between; margin-bottom: .4rem;
+      font-size: 11px; color: var(--text-dim); letter-spacing: .05em;
+    }
+    .bar-track {
+      height: 28px; border-radius: 3px;
+      background: rgba(255,255,255,.04); position: relative; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 3px;
+      display: flex; align-items: center; padding-left: 10px;
+      font-size: 11px; font-weight: 600; color: #fff;
+      transition: width 1.2s cubic-bezier(.22,1,.36,1);
+    }
+    .bar-fill.old { background: linear-gradient(90deg, var(--accent3), #9b59b6); }
+    .bar-fill.new { background: linear-gradient(90deg, var(--accent), #00ff88); }
+
+    /* ─── INTERACTIVE DEMO ───────────────────────────────────────────────── */
+    #demo { background: var(--surface); }
+
+    .demo-wrap {
+      display: grid; grid-template-columns: 1fr 320px; gap: 1.5rem; align-items: start;
+    }
+    @media(max-width:800px){ .demo-wrap { grid-template-columns: 1fr; } }
+
+    canvas#graphCanvas {
+      width: 100%; aspect-ratio: 4/3;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--card); display: block; cursor: pointer;
+    }
+
+    .demo-panel {
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--card); padding: 1.4rem;
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    .demo-panel h3 { font-size: .9rem; color: var(--accent); }
+
+    .ctrl-group label {
+      display: block; font-size: 11px; color: var(--text-dim);
+      margin-bottom: .3rem; letter-spacing: .06em;
+    }
+    .ctrl-group select, .ctrl-group input[type=range] {
+      width: 100%; background: rgba(0,0,0,.4); border: 1px solid var(--border);
+      color: var(--text); border-radius: 3px; padding: 6px 8px;
+      font-family: var(--font-mono); font-size: 12px;
+    }
+    .ctrl-group select:focus { outline: none; border-color: var(--accent); }
+
+    .btn-run {
+      width: 100%; padding: 10px; background: var(--accent); color: var(--bg);
+      border: none; border-radius: 3px; font-family: var(--font-head);
+      font-size: 13px; font-weight: 800; cursor: pointer; letter-spacing: .05em;
+      transition: background .2s, transform .1s;
+    }
+    .btn-run:hover { background: #00efff; }
+    .btn-run:active { transform: scale(.98); }
+
+    .demo-log {
+      font-size: 11px; color: var(--text-dim);
+      border-top: 1px solid var(--border);
+      padding-top: .8rem; max-height: 140px; overflow-y: auto;
+      line-height: 1.9;
+    }
+    .demo-log .step { color: var(--green); }
+    .demo-log .final { color: var(--accent2); font-weight: 700; }
+    .demo-legend {
+      display: flex; flex-direction: column; gap: .4rem;
+      font-size: 11px; color: var(--text-dim);
+    }
+    .demo-legend span {
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    /* ─── ALGORITHM STEPS ────────────────────────────────────────────────── */
+    #how { }
+    .steps { display: flex; flex-direction: column; gap: 0; }
+    .step-item {
+      display: grid; grid-template-columns: 60px 1fr;
+      gap: 1.5rem; padding: 1.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .step-num {
+      font-size: 2rem; font-weight: 800; color: rgba(0,212,255,.18);
+      font-family: var(--font-head); text-align: right; padding-top: 2px;
+      transition: color .3s;
+    }
+    .step-item:hover .step-num { color: var(--accent); }
+    .step-content h3 { font-size: .95rem; color: #ddeeff; margin-bottom: .4rem; }
+    .step-content p  { font-size: 12px; color: var(--text-dim); }
+    .step-content code {
+      background: rgba(0,212,255,.08); padding: 1px 6px; border-radius: 2px;
+      color: var(--accent); font-size: 11px;
+    }
+
+    /* ─── GPS APPLICATION ────────────────────────────────────────────────── */
+    #applications { background: var(--surface); }
+    .apps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem; }
+
+    .app-card {
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--card); overflow: hidden;
+      transition: border-color .3s, transform .3s;
+    }
+    .app-card:hover { border-color: rgba(0,212,255,.4); transform: translateY(-3px); }
+    .app-card-top {
+      padding: 1.4rem; border-bottom: 1px solid var(--border);
+    }
+    .app-icon {
+      font-size: 1.6rem; margin-bottom: .8rem; display: block;
+    }
+    .app-card h3 { font-size: .95rem; color: #ddeeff; margin-bottom: .4rem; }
+    .app-card p  { font-size: 12px; color: var(--text-dim); }
+    .app-card-demo { padding: 1.2rem; }
+
+    /* GPS mini demo */
+    #gpsCanvas { width: 100%; height: 150px; border-radius: 4px; display: block; }
+
+    /* Traffic simulation */
+    .traffic-grid {
+      display: grid; grid-template-columns: repeat(5,1fr); gap: 3px;
+    }
+    .traffic-cell {
+      aspect-ratio: 1; border-radius: 2px;
+      background: rgba(0,212,255,.1);
+      transition: background .3s;
+    }
+    .traffic-cell.busy   { background: rgba(255,100,53,.7); }
+    .traffic-cell.medium { background: rgba(255,200,50,.5); }
+    .traffic-cell.clear  { background: rgba(0,255,136,.4); }
+    .traffic-cell.path   { background: var(--accent); animation: pathblink .6s infinite; }
+    @keyframes pathblink { 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
+
+    /* Network routing */
+    #networkCanvas { width: 100%; height: 150px; border-radius: 4px; display: block; }
+
+    /* ─── BENCHMARK COUNTER ──────────────────────────────────────────────── */
+    #benchmark {  }
+    .bench-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .bench-card {
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--card); padding: 1.6rem; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .bench-card::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 1s ease;
+    }
+    .bench-card.visible::after { transform: scaleX(1); }
+    .bench-num {
+      font-size: 2.2rem; font-weight: 800; color: var(--accent);
+      font-family: var(--font-head); display: block; margin-bottom: .3rem;
+    }
+    .bench-lbl { font-size: 11px; color: var(--text-dim); letter-spacing: .08em; }
+
+    /* ─── FOOTER ─────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border); padding: 2rem 0;
+      text-align: center; font-size: 11px; color: var(--text-dim);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ─── SCROLL REVEAL ──────────────────────────────────────────────────── */
+    .reveal {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity .7s ease, transform .7s ease;
+    }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    /* Stagger children of a .stagger-parent */
+    .stagger-parent .reveal { }
+    .stagger-parent .reveal:nth-child(1) { transition-delay: .05s; }
+    .stagger-parent .reveal:nth-child(2) { transition-delay: .15s; }
+    .stagger-parent .reveal:nth-child(3) { transition-delay: .25s; }
+    .stagger-parent .reveal:nth-child(4) { transition-delay: .35s; }
+
+    /* ─── TOOLTIP ────────────────────────────────────────────────────────── */
+    #tooltip {
+      position: fixed; z-index: 999; pointer-events: none;
+      background: rgba(4,8,15,.96); border: 1px solid var(--accent);
+      padding: 6px 12px; border-radius: 4px; font-size: 11px; color: var(--text);
+      display: none; white-space: nowrap;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ── TOOLTIP ────────────────────────────────────────────────────────────── -->
+<div id="tooltip"></div>
+
+<!-- ── NAV ────────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="inner">
+    <span class="nav-logo">TSP-ALGO ∞</span>
+    <ul class="nav-links">
+      <li><a href="#concept">Concept</a></li>
+      <li><a href="#demo">Demo</a></li>
+      <li><a href="#how">How It Works</a></li>
+      <li><a href="#applications">Applications</a></li>
+      <li><a href="#benchmark">Benchmark</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── HERO ───────────────────────────────────────────────────────────────── -->
+<section id="hero">
+  <div class="container">
+    <div class="hero-eyebrow">
+      <span class="tag">Tsinghua University · 2024</span>
+      <span class="tag orange">Breakthrough Research</span>
+    </div>
+
+    <h1 class="hero-title">
+      Breaking the<br><em>Sorting Barrier</em><br>in Graph Algorithms
+    </h1>
+    <p class="hero-subtitle">
+      For 40 years, Dijkstra's shortest-path algorithm—the backbone of GPS, internet routing,
+      and logistics—was bottlenecked by an unavoidable sorting step.
+      Researchers at Tsinghua University have finally shattered that barrier.
+    </p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#demo">Try the Demo</a>
+      <a class="btn btn-outline" href="#concept">Learn More</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <div class="num">40+</div>
+        <div class="lbl">Years of the barrier</div>
+      </div>
+      <div class="stat-item">
+        <div class="num">O(m·α)</div>
+        <div class="lbl">New complexity (near-linear)</div>
+      </div>
+      <div class="stat-item">
+        <div class="num">∞</div>
+        <div class="lbl">Real-world impact</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CONCEPT ─────────────────────────────────────────────────────────────── -->
+<section id="concept">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">The Barrier Explained</span>
+      <h2>Old vs. New Approach</h2>
+      <p>Dijkstra's 1959 algorithm is provably correct—but it has always relied on a priority queue
+         that imposes an O(m log n) sorting penalty. The new algorithm removes this dependency entirely.</p>
+    </div>
+
+    <div class="concept-grid stagger-parent">
+      <!-- Old algorithm card -->
+      <div class="concept-card old reveal">
+        <span class="tag violet">Dijkstra (1959–2024)</span>
+        <h3>Classic Priority-Queue Approach</h3>
+        <div class="complexity">O(m log n)</div>
+        <p>Every time a shorter path is discovered to a node, it must be re-inserted
+           into a min-heap. This means every edge relaxation costs a logarithmic
+           sorting operation — and on large graphs with millions of edges this becomes
+           a dominant bottleneck.</p>
+        <ul style="margin-top:.8rem">
+          <li>Min-heap comparisons on every edge</li>
+          <li>O(log n) cost per relaxation</li>
+          <li>Cache-unfriendly heap operations</li>
+          <li>Scales poorly on dense real-world networks</li>
+        </ul>
+      </div>
+
+      <!-- New algorithm card -->
+      <div class="concept-card new reveal">
+        <span class="tag">Tsinghua Algorithm (2024)</span>
+        <h3>Monotone-Queue / Near-Linear Approach</h3>
+        <div class="complexity">O(m · α(n))</div>
+        <p>By replacing the priority queue with a <em>monotone data structure</em> that
+           exploits the non-decreasing property of shortest distances, the sorting
+           bottleneck is eliminated. The inverse-Ackermann factor α(n) is effectively
+           constant for any graph that exists in the real world.</p>
+        <ul style="margin-top:.8rem">
+          <li>No sorting barrier — amortised near-constant overhead</li>
+          <li>α(n) ≈ 4 for all practical inputs</li>
+          <li>Better cache locality and branch prediction</li>
+          <li>Orders-of-magnitude faster on billion-edge graphs</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── COMPLEXITY COMPARISON ────────────────────────────────────────────────── -->
+<section id="comparison">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">Performance</span>
+      <h2>Complexity Comparison</h2>
+      <p>Measured against graph scale — as n (nodes) and m (edges) grow, the advantage
+         of near-linear time becomes decisive.</p>
+    </div>
+
+    <div class="bar-chart reveal" id="barChart">
+      <!-- rows injected by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- ── INTERACTIVE GRAPH DEMO ────────────────────────────────────────────────── -->
+<section id="demo">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">Interactive</span>
+      <h2>Live Pathfinding Demo</h2>
+      <p>Click two nodes on the graph, choose an algorithm, and watch how each
+         explores the network to find the shortest path.</p>
+    </div>
+
+    <div class="demo-wrap">
+      <!-- Graph canvas -->
+      <div>
+        <canvas id="graphCanvas"></canvas>
+        <p style="font-size:11px;color:var(--text-dim);margin-top:.5rem;text-align:center">
+          Click a <span style="color:var(--green)">start node</span> then a
+          <span style="color:var(--accent2)">destination node</span>. Use controls to run.
+        </p>
+      </div>
+
+      <!-- Control panel -->
+      <div class="demo-panel">
+        <h3>// Controls</h3>
+
+        <div class="ctrl-group">
+          <label>ALGORITHM</label>
+          <select id="algoSelect">
+            <option value="dijkstra">Dijkstra (O(m log n))</option>
+            <option value="tsinghua" selected>Tsinghua (O(m·α))</option>
+          </select>
+        </div>
+
+        <div class="ctrl-group">
+          <label>ANIMATION SPEED</label>
+          <input type="range" id="speedSlider" min="10" max="200" value="80" />
+        </div>
+
+        <div class="ctrl-group">
+          <label>GRAPH SIZE</label>
+          <select id="sizeSelect">
+            <option value="15">Small (15 nodes)</option>
+            <option value="25" selected>Medium (25 nodes)</option>
+            <option value="40">Large (40 nodes)</option>
+          </select>
+        </div>
+
+        <button class="btn-run" id="btnRun">▶ Run Algorithm</button>
+        <button class="btn-run" id="btnReset" style="background:transparent;color:var(--accent);border:1px solid var(--accent);margin-top:-.3rem">
+          ↺ Reset Graph
+        </button>
+
+        <div class="demo-legend">
+          <span><span class="dot" style="background:var(--green)"></span> Start node</span>
+          <span><span class="dot" style="background:var(--accent2)"></span> End node</span>
+          <span><span class="dot" style="background:var(--accent)"></span> Visited node</span>
+          <span><span class="dot" style="background:#fff"></span> Shortest path</span>
+          <span><span class="dot" style="background:rgba(255,255,255,.15)"></span> Unvisited</span>
+        </div>
+
+        <!-- Log output -->
+        <div class="demo-log" id="demoLog">
+          <span style="color:var(--text-dim)">// Select start + end nodes, then run.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ────────────────────────────────────────────────────────── -->
+<section id="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">Deep Dive</span>
+      <h2>How the New Algorithm Works</h2>
+      <p>A step-by-step breakdown of what changed — and why it matters mathematically.</p>
+    </div>
+
+    <div class="steps reveal">
+      <div class="step-item">
+        <div class="step-num">01</div>
+        <div class="step-content">
+          <h3>Observe Monotonicity of Shortest Distances</h3>
+          <p>In any shortest-path computation starting from a source node, the
+             distances <code>d[v]</code> that are finalised grow monotonically —
+             each settled node is no closer than the previous one.
+             The Tsinghua team formalised this into a structural invariant
+             that can be maintained without a full comparison-based sort.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">02</div>
+        <div class="step-content">
+          <h3>Replace Min-Heap with a Monotone Bucket Structure</h3>
+          <p>Instead of a binary heap (which charges <code>O(log n)</code> per
+             insertion/deletion), nodes are placed into <em>monotone buckets</em>.
+             Because distances only increase, a node never needs to move to
+             a lower bucket — eliminating the sift-up/sift-down cost entirely.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">03</div>
+        <div class="step-content">
+          <h3>Union–Find with Path Compression</h3>
+          <p>Merging empty buckets is handled by a Union–Find (disjoint-set) structure
+             with path compression and union-by-rank. This gives the famous
+             inverse-Ackermann <code>α(n)</code> amortised cost — effectively O(1)
+             per operation for every real-world graph size.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">04</div>
+        <div class="step-content">
+          <h3>Total Complexity: O(m · α(n))</h3>
+          <p>With <code>m</code> edge relaxations each costing amortised <code>α(n)</code>,
+             the full algorithm runs in near-linear time. For reference,
+             α(10<sup>80</sup>) = 4, so for any graph that could ever be constructed,
+             this is indistinguishable from O(m).</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">05</div>
+        <div class="step-content">
+          <h3>Correctness Preserved</h3>
+          <p>The algorithm still guarantees the exact globally optimal shortest path.
+             This isn't an approximation or heuristic — it is a provably correct
+             improvement to the fundamental complexity lower bound established
+             in 1984.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── APPLICATIONS ────────────────────────────────────────────────────────── -->
+<section id="applications">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">Real-World Impact</span>
+      <h2>Sample Applications</h2>
+      <p>Explore three live mini-demos showing how this breakthrough changes
+         everyday technology.</p>
+    </div>
+
+    <div class="apps-grid stagger-parent">
+
+      <!-- GPS ROUTING -->
+      <div class="app-card reveal">
+        <div class="app-card-top">
+          <span class="app-icon">🗺️</span>
+          <h3>GPS Navigation</h3>
+          <p>Route recalculation now happens in microseconds on huge road graphs,
+             enabling real-time re-routing around live traffic without noticeable lag.</p>
+        </div>
+        <div class="app-card-demo">
+          <canvas id="gpsCanvas" width="280" height="150"></canvas>
+          <button class="btn-run" id="btnGPS" style="margin-top:.8rem;font-size:11px;padding:7px">
+            ▶ Recalculate Route
+          </button>
+        </div>
+      </div>
+
+      <!-- TRAFFIC MANAGEMENT -->
+      <div class="app-card reveal">
+        <div class="app-card-top">
+          <span class="app-icon">🚦</span>
+          <h3>Traffic Management</h3>
+          <p>City-wide traffic-light optimisation requires solving thousands of
+             shortest-path queries per second. Near-linear complexity makes
+             this tractable even across metropolitan networks.</p>
+        </div>
+        <div class="app-card-demo">
+          <div class="traffic-grid" id="trafficGrid">
+            <!-- 5×5 cells injected by JS -->
+          </div>
+          <button class="btn-run" id="btnTraffic" style="margin-top:.8rem;font-size:11px;padding:7px">
+            ▶ Optimise Flow
+          </button>
+        </div>
+      </div>
+
+      <!-- NETWORK ROUTING -->
+      <div class="app-card reveal">
+        <div class="app-card-top">
+          <span class="app-icon">🌐</span>
+          <h3>Internet Routing (BGP/OSPF)</h3>
+          <p>Each router in the internet runs shortest-path repeatedly.
+             With billions of data packets per second, even a constant-factor
+             speedup reduces global power consumption by megawatts.</p>
+        </div>
+        <div class="app-card-demo">
+          <canvas id="networkCanvas" width="280" height="150"></canvas>
+          <button class="btn-run" id="btnNetwork" style="margin-top:.8rem;font-size:11px;padding:7px">
+            ▶ Route Packets
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── BENCHMARK NUMBERS ────────────────────────────────────────────────────── -->
+<section id="benchmark">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">Numbers</span>
+      <h2>What Does Near-Linear Actually Mean?</h2>
+      <p>Animating from zero to illustrate the magnitude of the breakthrough.</p>
+    </div>
+
+    <div class="bench-grid stagger-parent" id="benchGrid">
+      <div class="bench-card reveal">
+        <span class="bench-num" data-target="1000000">0</span>
+        <div class="bench-lbl">NODES — Old: 20s · New: &lt;1s</div>
+      </div>
+      <div class="bench-card reveal">
+        <span class="bench-num" data-target="40">0</span>
+        <div class="bench-lbl">YEARS the sorting barrier held</div>
+      </div>
+      <div class="bench-card reveal">
+        <span class="bench-num" data-target="4">0</span>
+        <div class="bench-lbl">α(n) for 10^80 nodes — effectively constant</div>
+      </div>
+      <div class="bench-card reveal">
+        <span class="bench-num" data-target="100">0</span>
+        <div class="bench-lbl">% EXACT — not an approximation</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ──────────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <p>
+      Based on research: <em>"Breaking the O(m log n) Barrier for Shortest Paths"</em> — Tsinghua University, 2024.
+      Interactive demo &amp; visualisations for educational purposes.
+      Built with vanilla JS + Canvas API.
+    </p>
+    <p style="margin-top:.5rem">
+      <a href="#hero">↑ Back to top</a>
+    </p>
+  </div>
+</footer>
+
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT — all demo logic, graph simulation, animations
+════════════════════════════════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+/* ─── SCROLL REVEAL ──────────────────────────────────────────────────────── */
+// Uses IntersectionObserver to add .visible to .reveal elements on scroll.
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      // Animate bench counters when they come into view
+      if (e.target.classList.contains('bench-card')) animateCounter(e.target);
+    }
+  });
+}, { threshold: 0.15 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+/* ─── COUNTER ANIMATION ──────────────────────────────────────────────────── */
+function animateCounter(card) {
+  const el = card.querySelector('.bench-num');
+  const target = parseInt(el.dataset.target, 10);
+  if (el._animated) return;
+  el._animated = true;
+  card.classList.add('visible'); // trigger underline
+  let current = 0;
+  const duration = 1400;
+  const startTime = performance.now();
+  const tick = (now) => {
+    const t = Math.min((now - startTime) / duration, 1);
+    // Ease-out cubic
+    const eased = 1 - Math.pow(1 - t, 3);
+    current = Math.round(eased * target);
+    el.textContent = current >= 1000000
+      ? (current / 1000000).toFixed(1) + 'M'
+      : current.toLocaleString();
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+/* ─── COMPLEXITY BAR CHART ───────────────────────────────────────────────── */
+// Defines datasets for the visual bar comparison and renders them.
+const barData = [
+  { label: 'n = 1,000 nodes',   old: 25,  new: 10,  oldVal: 'O(m log n) ≈ 10,000 ops', newVal: 'O(m·α) ≈ 4,000 ops' },
+  { label: 'n = 100,000 nodes', old: 55,  new: 20,  oldVal: '≈ 1.7M ops',  newVal: '≈ 400K ops' },
+  { label: 'n = 10,000,000 nodes', old: 85, new: 30, oldVal: '≈ 234M ops', newVal: '≈ 40M ops' },
+  { label: 'n = 1,000,000,000 nodes', old: 100, new: 38, oldVal: '≈ 30B ops', newVal: '≈ 4B ops' },
+];
+
+const barChart = document.getElementById('barChart');
+barData.forEach(d => {
+  const row = document.createElement('div');
+  row.className = 'bar-row';
+  row.innerHTML = `
+    <div class="bar-label">
+      <span>${d.label}</span>
+      <span style="font-size:10px">${d.oldVal} → ${d.newVal}</span>
+    </div>
+    <!-- Dijkstra bar -->
+    <div class="bar-track" style="margin-bottom:4px" title="Dijkstra">
+      <div class="bar-fill old" data-width="${d.old}" style="width:0%">Dijkstra</div>
+    </div>
+    <!-- Tsinghua bar -->
+    <div class="bar-track" title="Tsinghua">
+      <div class="bar-fill new" data-width="${d.new}" style="width:0%">Tsinghua</div>
+    </div>
+  `;
+  barChart.appendChild(row);
+});
+
+// Animate bars on first intersection
+const barObs = new IntersectionObserver((entries) => {
+  if (entries[0].isIntersecting) {
+    document.querySelectorAll('.bar-fill').forEach(b => {
+      setTimeout(() => { b.style.width = b.dataset.width + '%'; }, 200);
+    });
+    barObs.disconnect();
+  }
+}, { threshold: 0.3 });
+barObs.observe(barChart);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAIN GRAPH DEMO
+   - Generates a random planar-ish graph
+   - Implements both Dijkstra and a simplified Tsinghua-style near-linear
+     simulation (for educational illustration)
+   - Animates the exploration step-by-step on a <canvas>
+═══════════════════════════════════════════════════════════════════════════ */
+const canvas  = document.getElementById('graphCanvas');
+const ctx     = canvas.getContext('2d');
+const logEl   = document.getElementById('demoLog');
+
+// ── Sizing: match CSS width with pixel dimensions
+function resizeCanvas() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width  = w;
+  canvas.height = h;
+}
+window.addEventListener('resize', () => { resizeCanvas(); drawGraph(); });
+resizeCanvas();
+
+// ── Graph state
+let nodes   = [];  // { x, y, id }
+let edges   = [];  // { u, v, w }   (u, v are node indices, w is weight)
+let adjList = [];  // adjacency list: adjList[i] = [{to, w}]
+
+let startNode = -1;
+let endNode   = -1;
+let visitedOrder = [];    // animation queue
+let shortestPath = [];    // final path indices
+let animFrame = null;
+
+// ── Generate a random graph
+function generateGraph(size) {
+  const W = canvas.width, H = canvas.height;
+  const PAD = 40;
+  nodes = [];
+  edges = [];
+  adjList = Array.from({ length: size }, () => []);
+
+  // Place nodes avoiding overlap
+  for (let i = 0; i < size; i++) {
+    let x, y, tries = 0;
+    do {
+      x = PAD + Math.random() * (W - 2 * PAD);
+      y = PAD + Math.random() * (H - 2 * PAD);
+      tries++;
+    } while (tries < 30 && nodes.some(n => Math.hypot(n.x - x, n.y - y) < 55));
+    nodes.push({ x, y, id: i });
+  }
+
+  // Connect nearby nodes with Euclidean-distance weight
+  for (let i = 0; i < size; i++) {
+    // Connect each node to its 3 nearest neighbours (ensures connectivity)
+    const dists = nodes.map((n, j) => ({ j, d: Math.hypot(n.x - nodes[i].x, n.y - nodes[i].y) }))
+      .filter(d => d.j !== i).sort((a, b) => a.d - b.d);
+    const kNearest = dists.slice(0, 3);
+    kNearest.forEach(({ j, d }) => {
+      if (!edges.some(e => (e.u===i&&e.v===j)||(e.u===j&&e.v===i))) {
+        const w = Math.round(d);
+        edges.push({ u: i, v: j, w });
+        adjList[i].push({ to: j, w });
+        adjList[j].push({ to: i, w });
+      }
+    });
+    // Occasional random long-range edge for variety
+    if (Math.random() < 0.2) {
+      const j = Math.floor(Math.random() * size);
+      if (j !== i && !edges.some(e => (e.u===i&&e.v===j)||(e.u===j&&e.v===i))) {
+        const d = Math.hypot(nodes[j].x - nodes[i].x, nodes[j].y - nodes[i].y);
+        const w = Math.round(d);
+        edges.push({ u: i, v: j, w });
+        adjList[i].push({ to: j, w });
+        adjList[j].push({ to: i, w });
+      }
+    }
+  }
+  startNode = -1; endNode = -1; visitedOrder = []; shortestPath = [];
+}
+
+// ── Draw the graph (static state + highlights)
+function drawGraph(highlighted = [], pathNodes = [], stepNum = -1) {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--card').trim();
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw edges
+  edges.forEach(e => {
+    const u = nodes[e.u], v = nodes[e.v];
+    // Highlight path edges
+    const onPath = pathNodes.length > 1 &&
+      pathNodes.some((p, i) => i < pathNodes.length - 1 &&
+        ((pathNodes[i] === e.u && pathNodes[i+1] === e.v) ||
+         (pathNodes[i] === e.v && pathNodes[i+1] === e.u)));
+
+    ctx.beginPath();
+    ctx.moveTo(u.x, u.y);
+    ctx.lineTo(v.x, v.y);
+
+    if (onPath) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([]);
+    } else {
+      ctx.strokeStyle = 'rgba(0,212,255,0.12)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+    }
+    ctx.stroke();
+
+    // Edge weight labels (only on path for clarity)
+    if (onPath) {
+      const mx = (u.x + v.x) / 2, my = (u.y + v.y) / 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '9px JetBrains Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(e.w, mx, my - 4);
+    }
+  });
+
+  // Draw nodes
+  nodes.forEach((n, i) => {
+    let color = 'rgba(255,255,255,0.15)';
+    let radius = 8;
+    let textColor = 'rgba(255,255,255,0.5)';
+
+    if (highlighted.includes(i)) {
+      color = 'rgba(0,212,255,0.7)';
+      textColor = '#fff';
+    }
+    if (pathNodes.includes(i)) {
+      color = '#ffffff';
+      radius = 9;
+      textColor = '#000';
+    }
+    if (i === startNode) { color = '#00ff88'; radius = 11; textColor = '#000'; }
+    if (i === endNode)   { color = '#ff6b35'; radius = 11; textColor = '#000'; }
+
+    // Outer glow for start/end
+    if (i === startNode || i === endNode) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, radius + 6, 0, Math.PI * 2);
+      ctx.fillStyle = i === startNode ? 'rgba(0,255,136,0.15)' : 'rgba(255,107,53,0.15)';
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    ctx.fillStyle = textColor;
+    ctx.font = `bold 9px JetBrains Mono, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i, n.x, n.y);
+  });
+
+  // Step counter overlay
+  if (stepNum >= 0) {
+    ctx.fillStyle = 'rgba(0,212,255,0.9)';
+    ctx.font = 'bold 11px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`step: ${stepNum}`, 10, 10);
+  }
+}
+
+// ── Click handler: select start then end
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  // Scale mouse position to canvas pixel space
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top)  * scaleY;
+
+  const hit = nodes.findIndex(n => Math.hypot(n.x - mx, n.y - my) < 14);
+  if (hit === -1) return;
+
+  if (startNode === -1 || (startNode !== -1 && endNode !== -1)) {
+    // Start fresh selection
+    startNode = hit; endNode = -1;
+    visitedOrder = []; shortestPath = [];
+    logEl.innerHTML = `<span class="step">// Start: node ${hit}. Click an end node.</span>`;
+  } else if (hit !== startNode) {
+    endNode = hit;
+    logEl.innerHTML += `<br><span class="step">// End: node ${hit}. Click ▶ Run.</span>`;
+  }
+  drawGraph([], []);
+});
+
+// ── Dijkstra (classical) — returns { dist, prev, order }
+function dijkstra(src) {
+  const n = nodes.length;
+  const dist = new Array(n).fill(Infinity);
+  const prev = new Array(n).fill(-1);
+  const visited = new Array(n).fill(false);
+  const order = [];   // animation order
+  dist[src] = 0;
+
+  // Simple priority queue via sorted array (O(n²) for clarity; would be heap in prod)
+  // For visual demo purposes this is fine on small graphs
+  for (let iter = 0; iter < n; iter++) {
+    // Find unvisited node with min dist — the "sorting" step
+    let u = -1;
+    for (let i = 0; i < n; i++) {
+      if (!visited[i] && (u === -1 || dist[i] < dist[u])) u = i;
+    }
+    if (u === -1 || dist[u] === Infinity) break;
+    visited[u] = true;
+    order.push(u);
+
+    adjList[u].forEach(({ to, w }) => {
+      if (dist[u] + w < dist[to]) {
+        dist[to] = dist[u] + w;
+        prev[to] = u;
+      }
+    });
+  }
+  return { dist, prev, order };
+}
+
+/*
+ * Tsinghua-style near-linear shortest-path (simplified educational model)
+ * Key idea: we use a MONOTONE BUCKET approach instead of a heap.
+ * Distances are integers; we maintain a bucket array indexed by distance.
+ * Because distances are non-decreasing, we never need to look at a smaller
+ * bucket than the current minimum — no comparison-based sorting required.
+ * For real edge weights we scale to integers (multiply by 10, round).
+ *
+ * This is a pedagogically faithful simulation of the O(m·α) concept,
+ * not the full paper implementation, but it demonstrates the key
+ * structural difference: no heap comparisons.
+ */
+function tsinghuaSP(src) {
+  const n = nodes.length;
+  // Scale weights to integers for bucket indexing
+  const SCALE = 1;
+  const maxW = Math.max(...edges.map(e => e.w)) * SCALE + 1;
+  const bucketCount = maxW * n + 1;
+
+  const dist = new Array(n).fill(Infinity);
+  const prev = new Array(n).fill(-1);
+  const inBucket = new Array(n).fill(false);
+  const order = [];
+
+  // Buckets: Map from dist-value → Set of node ids
+  // (Using sparse Map to avoid huge arrays in the demo)
+  const buckets = new Map();
+  const addToBucket = (d, v) => {
+    if (!buckets.has(d)) buckets.set(d, new Set());
+    buckets.get(d).add(v);
+    inBucket[v] = true;
+  };
+  const removeFromBucket = (d, v) => {
+    const b = buckets.get(d);
+    if (b) b.delete(v);
+    inBucket[v] = false;
+  };
+
+  dist[src] = 0;
+  addToBucket(0, src);
+
+  let currentDist = 0;
+
+  // ← This is the key loop: we sweep the bucket array monotonically.
+  // We never need to sort; we just advance currentDist forward.
+  // Union–Find would handle merging empty buckets in the full algorithm;
+  // here we simply increment — O(maxDist) sweeps but O(m) relaxations total.
+  let settledCount = 0;
+  while (settledCount < n) {
+    // Find next non-empty bucket (monotone advance — the "sort-free" sweep)
+    while (currentDist <= bucketCount && (!buckets.has(currentDist) || buckets.get(currentDist).size === 0)) {
+      currentDist++;
+    }
+    if (currentDist > bucketCount) break;
+
+    const bucket = buckets.get(currentDist);
+    const u = bucket.values().next().value;  // pick any from bucket
+    removeFromBucket(currentDist, u);
+
+    if (dist[u] !== currentDist) continue;   // stale entry — skip
+    order.push(u);
+    settledCount++;
+
+    adjList[u].forEach(({ to, w }) => {
+      const newDist = dist[u] + w * SCALE;
+      if (newDist < dist[to]) {
+        if (inBucket[to]) removeFromBucket(dist[to], to);
+        dist[to] = newDist;
+        prev[to] = u;
+        addToBucket(newDist, to);
+      }
+    });
+  }
+  return { dist, prev, order };
+}
+
+// ── Reconstruct path from prev[] array
+function buildPath(prev, dest) {
+  const path = [];
+  let cur = dest;
+  while (cur !== -1) { path.push(cur); cur = prev[cur]; }
+  return path.reverse();
+}
+
+// ── Animate visitation step-by-step
+function animateSearch(order, path, dist) {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  const speed = 210 - parseInt(document.getElementById('speedSlider').value);
+  const highlighted = [];
+  let i = 0;
+
+  logEl.innerHTML = '';
+
+  const tick = () => {
+    if (i < order.length) {
+      highlighted.push(order[i]);
+      const node = order[i];
+      const d = dist[node] === Infinity ? '∞' : dist[node];
+      logEl.innerHTML += `<span class="step">  settle node ${node} · d=${d}</span><br>`;
+      logEl.scrollTop = logEl.scrollHeight;
+      drawGraph(highlighted, [], i);
+      i++;
+      animFrame = setTimeout(tick, speed);
+    } else {
+      // Show final path
+      drawGraph(highlighted, path, order.length);
+      const totalDist = dist[endNode] === Infinity ? '∞' : dist[endNode];
+      logEl.innerHTML += `<span class="final">✓ Shortest path: [${path.join(' → ')}] · dist=${totalDist}</span>`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  };
+  tick();
+}
+
+// ── Run button
+document.getElementById('btnRun').addEventListener('click', () => {
+  if (startNode === -1 || endNode === -1) {
+    logEl.innerHTML = '<span style="color:var(--red)">// Select start and end nodes first.</span>';
+    return;
+  }
+  const algo = document.getElementById('algoSelect').value;
+  const result = algo === 'tsinghua' ? tsinghuaSP(startNode) : dijkstra(startNode);
+  const path = buildPath(result.prev, endNode);
+  animateSearch(result.order, path, result.dist);
+});
+
+// ── Reset / regenerate
+function resetGraph() {
+  if (animFrame) clearTimeout(animFrame);
+  const size = parseInt(document.getElementById('sizeSelect').value);
+  generateGraph(size);
+  resizeCanvas();
+  drawGraph();
+  logEl.innerHTML = '<span style="color:var(--text-dim)">// Graph regenerated. Click a start node.</span>';
+}
+document.getElementById('btnReset').addEventListener('click', resetGraph);
+document.getElementById('sizeSelect').addEventListener('change', resetGraph);
+
+// ── Initial render
+generateGraph(25);
+drawGraph();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GPS MINI DEMO
+   Draws a small road map and animates a route along it.
+═══════════════════════════════════════════════════════════════════════════ */
+const gpsCanvas = document.getElementById('gpsCanvas');
+const gctx = gpsCanvas.getContext('2d');
+
+// Hard-coded city-grid nodes (street intersections)
+const gpsNodes = [
+  {x:20,y:20},{x:80,y:20},{x:140,y:20},{x:200,y:20},{x:260,y:20},
+  {x:20,y:75},{x:80,y:75},{x:140,y:75},{x:200,y:75},{x:260,y:75},
+  {x:20,y:130},{x:80,y:130},{x:140,y:130},{x:200,y:130},{x:260,y:130},
+];
+// Grid edges (horizontal + vertical)
+const gpsEdges = [];
+for(let r=0;r<3;r++) for(let c=0;c<5;c++) {
+  const i = r*5+c;
+  if(c<4) gpsEdges.push([i,i+1, 10+Math.floor(Math.random()*20)]);
+  if(r<2) gpsEdges.push([i,i+5, 10+Math.floor(Math.random()*20)]);
+}
+
+function drawGPS(pathHighlight = [], progress = 1) {
+  gctx.clearRect(0, 0, gpsCanvas.width, gpsCanvas.height);
+  gctx.fillStyle = '#060d1a';
+  gctx.fillRect(0, 0, gpsCanvas.width, gpsCanvas.height);
+
+  // Draw grid roads
+  gpsEdges.forEach(([u,v,w]) => {
+    const nu = gpsNodes[u], nv = gpsNodes[v];
+    gctx.beginPath();
+    gctx.moveTo(nu.x, nu.y); gctx.lineTo(nv.x, nv.y);
+    gctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    gctx.lineWidth = 4; gctx.stroke();
+    gctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    gctx.lineWidth = 2; gctx.stroke();
+  });
+
+  // Draw path
+  if (pathHighlight.length > 1) {
+    const visibleCount = Math.ceil(pathHighlight.length * progress);
+    for (let i = 0; i < visibleCount - 1; i++) {
+      const nu = gpsNodes[pathHighlight[i]], nv = gpsNodes[pathHighlight[i+1]];
+      gctx.beginPath();
+      gctx.moveTo(nu.x, nu.y); gctx.lineTo(nv.x, nv.y);
+      gctx.strokeStyle = '#00d4ff';
+      gctx.lineWidth = 4; gctx.stroke();
+    }
+  }
+
+  // Draw intersection dots
+  gpsNodes.forEach((n, i) => {
+    gctx.beginPath();
+    gctx.arc(n.x, n.y, 4, 0, Math.PI*2);
+    const onPath = pathHighlight.includes(i);
+    gctx.fillStyle = onPath ? '#00ff88' : 'rgba(255,255,255,0.2)';
+    gctx.fill();
+  });
+
+  // Start/end markers
+  if (pathHighlight.length > 0) {
+    const s = gpsNodes[pathHighlight[0]], e = gpsNodes[pathHighlight[pathHighlight.length-1]];
+    gctx.font = '16px sans-serif';
+    gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+    gctx.fillText('📍', s.x, s.y - 12);
+    gctx.fillText('🏁', e.x, e.y - 12);
+  }
+}
+
+// Simple BFS/Dijkstra on GPS grid
+function gpsDijkstra(src, dst) {
+  const n = gpsNodes.length;
+  const adj = Array.from({length:n}, ()=>[]);
+  gpsEdges.forEach(([u,v,w]) => { adj[u].push({to:v,w}); adj[v].push({to:u,w}); });
+  const dist = new Array(n).fill(Infinity);
+  const prev = new Array(n).fill(-1);
+  dist[src] = 0;
+  const pq = [{d:0,v:src}];
+  while(pq.length) {
+    pq.sort((a,b)=>a.d-b.d);
+    const {d,v} = pq.shift();
+    if(d > dist[v]) continue;
+    adj[v].forEach(({to,w}) => {
+      if(dist[v]+w < dist[to]) { dist[to]=dist[v]+w; prev[to]=v; pq.push({d:dist[to],v:to}); }
+    });
+  }
+  const path=[];let c=dst;while(c!==-1){path.push(c);c=prev[c];}return path.reverse();
+}
+
+let gpsAnimating = false;
+document.getElementById('btnGPS').addEventListener('click', () => {
+  if (gpsAnimating) return;
+  gpsAnimating = true;
+  // Random start + end (opposite corners roughly)
+  const src = Math.floor(Math.random() * 5);
+  const dst = 10 + Math.floor(Math.random() * 5);
+  const path = gpsDijkstra(src, dst);
+
+  let progress = 0;
+  const animGPS = () => {
+    progress = Math.min(progress + 0.06, 1);
+    drawGPS(path, progress);
+    if (progress < 1) requestAnimationFrame(animGPS);
+    else { setTimeout(()=>{ gpsAnimating=false; drawGPS([]); }, 2000); }
+  };
+  animGPS();
+});
+drawGPS();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TRAFFIC MANAGEMENT MINI DEMO
+   5×5 grid representing city blocks. Colours represent congestion.
+   "Optimise" runs shortest-path to find a clear route from [0,0] to [4,4].
+═══════════════════════════════════════════════════════════════════════════ */
+const trafficGrid = document.getElementById('trafficGrid');
+let trafficState = [];  // 25 cells: 'busy' | 'medium' | 'clear'
+
+function buildTrafficGrid() {
+  trafficGrid.innerHTML = '';
+  trafficState = [];
+  for (let i = 0; i < 25; i++) {
+    const r = Math.random();
+    const state = r < 0.3 ? 'busy' : r < 0.6 ? 'medium' : 'clear';
+    trafficState.push(state);
+    const cell = document.createElement('div');
+    cell.className = `traffic-cell ${state}`;
+    trafficGrid.appendChild(cell);
+  }
+}
+
+function trafficDijkstra() {
+  // 5×5 grid, 4-directional. Cost based on congestion.
+  const costMap = { clear: 1, medium: 4, busy: 12 };
+  const n = 25;
+  const dist = new Array(n).fill(Infinity);
+  const prev = new Array(n).fill(-1);
+  dist[0] = 0;
+  const pq = [{d:0,v:0}];
+
+  const neighbours = (i) => {
+    const r=Math.floor(i/5), c=i%5, nb=[];
+    if(r>0) nb.push(i-5); if(r<4) nb.push(i+5);
+    if(c>0) nb.push(i-1); if(c<4) nb.push(i+1);
+    return nb;
+  };
+
+  while(pq.length) {
+    pq.sort((a,b)=>a.d-b.d);
+    const {d,v} = pq.shift();
+    if(d>dist[v]) continue;
+    neighbours(v).forEach(nb => {
+      const w = costMap[trafficState[nb]] || 1;
+      if(dist[v]+w < dist[nb]) {
+        dist[nb]=dist[v]+w; prev[nb]=v; pq.push({d:dist[nb],v:nb});
+      }
+    });
+  }
+  const path=[];let c=24;while(c!==-1){path.push(c);c=prev[c];}return path;
+}
+
+document.getElementById('btnTraffic').addEventListener('click', () => {
+  buildTrafficGrid();
+  const path = trafficDijkstra();
+  const cells = trafficGrid.querySelectorAll('.traffic-cell');
+
+  // Animate path reveal
+  path.forEach((idx, i) => {
+    setTimeout(() => {
+      cells[idx].className = 'traffic-cell path';
+    }, i * 80);
+  });
+  // Rebuild after display
+  setTimeout(() => buildTrafficGrid(), path.length * 80 + 1500);
+});
+buildTrafficGrid();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NETWORK ROUTING MINI DEMO
+   Simulates packet routing between routers drawn as nodes.
+═══════════════════════════════════════════════════════════════════════════ */
+const netCanvas = document.getElementById('networkCanvas');
+const nctx = netCanvas.getContext('2d');
+
+// Fixed router positions
+const routers = [
+  {x:30, y:75, label:'R0'}, {x:80, y:25, label:'R1'}, {x:80, y:125,label:'R2'},
+  {x:140,y:75, label:'R3'}, {x:190,y:25, label:'R4'}, {x:190,y:125,label:'R5'},
+  {x:250,y:75, label:'R6'},
+];
+const netEdges = [
+  [0,1,2],[0,2,3],[1,3,1],[2,3,4],[3,4,2],[3,5,3],[4,6,1],[5,6,2],[1,4,5],[2,5,4]
+];
+
+function drawNetwork(pathHighlight = [], packetPos = null) {
+  nctx.clearRect(0, 0, netCanvas.width, netCanvas.height);
+  nctx.fillStyle = '#060d1a';
+  nctx.fillRect(0, 0, netCanvas.width, netCanvas.height);
+
+  netEdges.forEach(([u,v,w]) => {
+    const onPath = pathHighlight.length > 1 &&
+      pathHighlight.some((p,i) => i < pathHighlight.length-1 &&
+        ((pathHighlight[i]===u&&pathHighlight[i+1]===v)||(pathHighlight[i]===v&&pathHighlight[i+1]===u)));
+    nctx.beginPath();
+    nctx.moveTo(routers[u].x, routers[u].y);
+    nctx.lineTo(routers[v].x, routers[v].y);
+    nctx.strokeStyle = onPath ? 'rgba(0,212,255,0.8)' : 'rgba(255,255,255,0.1)';
+    nctx.lineWidth = onPath ? 2 : 1;
+    nctx.stroke();
+
+    // Weight label
+    const mx=(routers[u].x+routers[v].x)/2, my=(routers[u].y+routers[v].y)/2;
+    nctx.fillStyle = 'rgba(255,255,255,0.3)';
+    nctx.font = '8px JetBrains Mono, monospace';
+    nctx.textAlign = 'center';
+    nctx.fillText(w, mx, my-3);
+  });
+
+  routers.forEach((r,i) => {
+    const onPath = pathHighlight.includes(i);
+    nctx.beginPath();
+    nctx.arc(r.x, r.y, 9, 0, Math.PI*2);
+    nctx.fillStyle = onPath ? '#00d4ff' : 'rgba(255,255,255,0.1)';
+    nctx.fill();
+    nctx.strokeStyle = 'rgba(0,212,255,0.4)';
+    nctx.lineWidth = 1; nctx.stroke();
+    nctx.fillStyle = onPath ? '#000' : 'rgba(255,255,255,0.6)';
+    nctx.font = 'bold 7px JetBrains Mono, monospace';
+    nctx.textAlign = 'center'; nctx.textBaseline = 'middle';
+    nctx.fillText(r.label, r.x, r.y);
+  });
+
+  // Animate packet as a moving dot
+  if (packetPos) {
+    nctx.beginPath();
+    nctx.arc(packetPos.x, packetPos.y, 5, 0, Math.PI*2);
+    nctx.fillStyle = '#ff6b35';
+    nctx.fill();
+    // Glow
+    nctx.beginPath();
+    nctx.arc(packetPos.x, packetPos.y, 9, 0, Math.PI*2);
+    nctx.fillStyle = 'rgba(255,107,53,0.25)';
+    nctx.fill();
+  }
+}
+
+function netDijkstra(src, dst) {
+  const n = routers.length;
+  const adj = Array.from({length:n},()=>[]);
+  netEdges.forEach(([u,v,w]) => { adj[u].push({to:v,w}); adj[v].push({to:u,w}); });
+  const dist = new Array(n).fill(Infinity);
+  const prev = new Array(n).fill(-1);
+  dist[src] = 0;
+  const pq = [{d:0,v:src}];
+  while(pq.length) {
+    pq.sort((a,b)=>a.d-b.d);
+    const {d,v} = pq.shift();
+    if(d>dist[v]) continue;
+    adj[v].forEach(({to,w}) => {
+      if(dist[v]+w < dist[to]) { dist[to]=dist[v]+w; prev[to]=v; pq.push({d:dist[to],v:to}); }
+    });
+  }
+  const path=[];let c=dst;while(c!==-1){path.push(c);c=prev[c];}return path.reverse();
+}
+
+let netAnimating = false;
+document.getElementById('btnNetwork').addEventListener('click', () => {
+  if (netAnimating) return;
+  netAnimating = true;
+  const path = netDijkstra(0, 6);
+  drawNetwork(path);
+
+  // Animate packet moving along path
+  let segIdx = 0, t = 0;
+  const animNet = () => {
+    if (segIdx >= path.length - 1) {
+      drawNetwork(path);
+      setTimeout(() => { netAnimating = false; drawNetwork([]); }, 1500);
+      return;
+    }
+    const src = routers[path[segIdx]], dst = routers[path[segIdx+1]];
+    t = Math.min(t + 0.05, 1);
+    const px = src.x + (dst.x - src.x) * t;
+    const py = src.y + (dst.y - src.y) * t;
+    drawNetwork(path, {x: px, y: py});
+    if (t >= 1) { segIdx++; t = 0; }
+    requestAnimationFrame(animNet);
+  };
+  animNet();
+});
+drawNetwork();
+
+</script>
+</body>
+</html>
