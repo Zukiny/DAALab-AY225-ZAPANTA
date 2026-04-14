@@ -1,21 +1,21 @@
-https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
-https://www.kaggle.com/datasets/zynicide/wine-reviews
-https://www.kaggle.com/datasets/zalando-research/fashionmnist
-https://www.kaggle.com/datasets/shayanfazeli/heartbeat
-https://www.kaggle.com/datasets/sartajbhuvaji/brain-tumor-classification-mri
-https://www.kaggle.com/datasets/uciml/human-activity-recognition-with-smartphones
-https://www.kaggle.com/datasets/lokeshparab/amazon-products-dataset
-https://www.kaggle.com/datasets/samuelcortinhas/cats-and-dogs-image-classification
-https://www.kaggle.com/datasets/theworldbank/education-statistics
-https://www.kaggle.com/datasets/theworldbank/world-bank-intl-education
-https://www.kaggle.com/datasets/theworldbank/health-nutrition-and-population-statistics
-https://www.kaggle.com/datasets/theworldbank/world-development-indicators
-https://www.kaggle.com/datasets/sharmajicoder/student-placement-prediction
-https://www.kaggle.com/datasets/somiel20/customer-churn-data
-https://www.kaggle.com/datasets/sharmajicoder/gaming-and-mental-health
-https://www.kaggle.com/datasets/theworldbank/international-debt-statistics
-https://www.kaggle.com/datasets/theworldbank/world-bank-gdp-ranking
-https://www.kaggle.com/datasets/theworldbank/global-population-estimates
-https://www.kaggle.com/datasets/theworldbank/world-bank-international-debt-statistics
-https://www.kaggle.com/datasets/ikramshah512/amazon-products-sales-dataset-42k-items-2025
-https://www.kaggle.com/datasets/davidgauthier/glassdoor-job-reviews
+Group 01 - https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
+Group 02 -https://www.kaggle.com/datasets/zynicide/wine-reviews
+Group 03 -https://www.kaggle.com/datasets/zalando-research/fashionmnist
+Group 04 -https://www.kaggle.com/datasets/shayanfazeli/heartbeat
+Group 05 -https://www.kaggle.com/datasets/sartajbhuvaji/brain-tumor-classification-mri
+Group 06 -https://www.kaggle.com/datasets/uciml/human-activity-recognition-with-smartphones
+Group 07 -https://www.kaggle.com/datasets/lokeshparab/amazon-products-dataset
+Group 08 -https://www.kaggle.com/datasets/samuelcortinhas/cats-and-dogs-image-classification
+Group 09 -https://www.kaggle.com/datasets/theworldbank/education-statistics
+Group 10 -https://www.kaggle.com/datasets/theworldbank/world-bank-intl-education
+Group 11 -https://www.kaggle.com/datasets/theworldbank/health-nutrition-and-population-statistics
+Group 12 -https://www.kaggle.com/datasets/theworldbank/world-development-indicators
+Group 13 -https://www.kaggle.com/datasets/sharmajicoder/student-placement-prediction
+Group 14 -https://www.kaggle.com/datasets/somiel20/customer-churn-data
+Group 15 -https://www.kaggle.com/datasets/sharmajicoder/gaming-and-mental-health
+Group 16 -https://www.kaggle.com/datasets/theworldbank/international-debt-statistics
+Group 17 -https://www.kaggle.com/datasets/theworldbank/world-bank-gdp-ranking
+Group 18 -https://www.kaggle.com/datasets/theworldbank/global-population-estimates
+Group 19 -https://www.kaggle.com/datasets/theworldbank/world-bank-international-debt-statistics
+Group 20 -https://www.kaggle.com/datasets/ikramshah512/amazon-products-sales-dataset-42k-items-2025
+Group 21 -https://www.kaggle.com/datasets/davidgauthier/glassdoor-job-reviews
