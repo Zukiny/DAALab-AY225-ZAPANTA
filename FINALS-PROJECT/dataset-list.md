@@ -2,7 +2,7 @@ Group 01 - https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud
 Group 02 -https://www.kaggle.com/datasets/zynicide/wine-reviews
 Group 03 -https://www.kaggle.com/datasets/zalando-research/fashionmnist
 Group 04 -https://www.kaggle.com/datasets/shayanfazeli/heartbeat
-Group 05 -https://www.kaggle.com/datasets/sartajbhuvaji/brain-tumor-classification-mri
+Group 05 -https://www.kaggle.com/datasets/sehaj1104/student-mental-health-and-burnout-dataset
 Group 06 -https://www.kaggle.com/datasets/uciml/human-activity-recognition-with-smartphones
 Group 07 -https://www.kaggle.com/datasets/lokeshparab/amazon-products-dataset
 Group 08 -https://www.kaggle.com/datasets/samuelcortinhas/cats-and-dogs-image-classification
